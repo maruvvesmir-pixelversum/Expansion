@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Universe Evolution Simulator v2.47.3</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+
+        #ui-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            font-size: 12px;
+        }
+
+        .ui-panel {
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #666;
+            padding: 8px;
+            margin: 4px;
+        }
+
+        #header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            border-bottom: 2px solid #666;
+            background: rgba(0, 0, 0, 0.95);
+        }
+
+        #temporal-nav {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            width: 450px;
+            max-width: calc(100vw - 8px);
+        }
+
+        #cosmological-state {
+            position: absolute;
+            top: 60px;
+            right: 0;
+            width: 350px;
+            max-width: calc(100vw - 8px);
+        }
+
+        #physics-status {
+            position: absolute;
+            top: 260px;
+            left: 0;
+            width: 350px;
+            max-width: calc(100vw - 8px);
+        }
+
+        #performance-metrics {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 350px;
+            max-width: calc(100vw - 8px);
+        }
+
+        #controls-help {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 450px;
+            max-width: calc(100vw - 8px);
+        }
+
+        .timeline-bar {
+            width: 100%;
+            height: 30px;
+            background: #222;
+            border: 1px solid #666;
+            position: relative;
+            margin: 8px 0;
+            cursor: pointer;
+        }
+
+        .timeline-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: #fff;
+            pointer-events: none;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #aaa;
+        }
+
+        .timeline-handle {
+            position: absolute;
+            top: -5px;
+            width: 20px;
+            height: 40px;
+            background: #fff;
+            border: 2px solid #666;
+            margin-left: -10px;
+            cursor: grab;
+        }
+
+        .timeline-handle:active {
+            cursor: grabbing;
+        }
+
+        button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 6px 12px;
+            margin: 2px;
+            cursor: pointer;
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            font-size: 11px;
+        }
+
+        button:hover {
+            background: #555;
+        }
+
+        button:active {
+            background: #222;
+        }
+
+        button.active {
+            background: #fff;
+            color: #000;
+        }
+
+        select, input[type="range"], input[type="number"] {
+            background: #222;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 4px;
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            font-size: 11px;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .data-label {
+            color: #aaa;
+        }
+
+        .data-value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .section-title {
+            font-weight: bold;
+            color: #fff;
+            margin: 8px 0 4px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #666;
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 8px 0;
+        }
+
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        #loading-screen.hidden {
+            display: none;
+        }
+
+        .loading-text {
+            font-size: 18px;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .loading-bar {
+            width: 400px;
+            max-width: 80vw;
+            height: 30px;
+            border: 1px solid #666;
+            background: #222;
+            position: relative;
+        }
+
+        .loading-bar-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: #fff;
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 900px) {
+            #temporal-nav, #cosmological-state, #physics-status,
+            #performance-metrics, #controls-help {
+                position: relative;
+                width: 100%;
+                max-width: 100%;
+                margin: 4px 0;
+            }
+
+            #ui-container {
+                overflow-y: auto;
+                pointer-events: auto;
+            }
+
+            .ui-panel {
+                position: relative !important;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #epoch-info {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 0 10px #000, 0 0 20px #000;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        #epoch-info.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loading-text">UNIVERSE EVOLUTION SIMULATOR v2.47.3</div>
+        <div class="loading-text">Initializing Physics Engine...</div>
+        <div class="loading-bar">
+            <div class="loading-bar-fill" id="loading-progress"></div>
+        </div>
+        <div class="loading-text" id="loading-status">Starting...</div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="universe-canvas"></canvas>
+    </div>
+
+    <div id="epoch-info"></div>
+
+    <div id="ui-container">
+        <div id="header" class="ui-panel">
+            <div style="font-size: 14px; font-weight: bold;">╔═══════════════════════════════════════════════════════════╗</div>
+            <div style="font-size: 14px; font-weight: bold;">║ UNIVERSE EVOLUTION SIMULATOR v2.47.3                     ║</div>
+            <div style="font-size: 14px; font-weight: bold;">╚═══════════════════════════════════════════════════════════╝</div>
+        </div>
+
+        <div id="temporal-nav" class="ui-panel">
+            <div class="section-title">┌─ TEMPORAL NAVIGATION ─────────────────┐</div>
+            <div class="data-row">
+                <span class="data-label">TIME:</span>
+                <span class="data-value" id="current-time">0.000 s</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">EPOCH:</span>
+                <span class="data-value" id="current-epoch">Planck Epoch</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">REDSHIFT:</span>
+                <span class="data-value" id="redshift">z = ∞</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">SCALE FACTOR:</span>
+                <span class="data-value" id="scale-factor">a = 0.00</span>
+            </div>
+
+            <div class="timeline-bar" id="timeline-bar">
+                <div class="timeline-progress" id="timeline-progress"></div>
+                <div class="timeline-handle" id="timeline-handle"></div>
+            </div>
+
+            <div class="button-row">
+                <button id="btn-play-pause">► PLAY</button>
+                <button id="btn-reset">⟲ RESET</button>
+                <button id="btn-slower">◄◄ SLOWER</button>
+                <button id="btn-faster">FASTER ►►</button>
+            </div>
+
+            <div class="data-row">
+                <span class="data-label">TIME SPEED:</span>
+                <span class="data-value" id="time-speed">×1.0E+6</span>
+            </div>
+
+            <div class="section-title">QUICK JUMP TO EPOCH:</div>
+            <div class="button-row">
+                <button class="epoch-btn" data-epoch="planck">Planck</button>
+                <button class="epoch-btn" data-epoch="inflation">Inflation</button>
+                <button class="epoch-btn" data-epoch="qgp">QGP</button>
+                <button class="epoch-btn" data-epoch="nucleosynthesis">Nucleosyn.</button>
+                <button class="epoch-btn" data-epoch="recombination">Recombin.</button>
+                <button class="epoch-btn" data-epoch="darkages">Dark Ages</button>
+                <button class="epoch-btn" data-epoch="firststars">First Stars</button>
+                <button class="epoch-btn" data-epoch="modern">Modern</button>
+                <button class="epoch-btn" data-epoch="present">Present</button>
+            </div>
+
+            <div class="section-title" style="margin-top: 12px;">FUTURE SCENARIOS:</div>
+            <div class="button-row">
+                <button class="epoch-btn" data-epoch="bigfreeze">Big Freeze</button>
+                <button class="epoch-btn" data-epoch="bigrip">Big Rip</button>
+                <button class="epoch-btn" data-epoch="bigcrunch">Big Crunch</button>
+                <button class="epoch-btn" data-epoch="bigbounce">Big Bounce</button>
+            </div>
+            <div style="margin-top: 4px;">└───────────────────────────────────────┘</div>
+        </div>
+
+        <div id="cosmological-state" class="ui-panel">
+            <div class="section-title">┌─ COSMOLOGICAL STATE ──────────┐</div>
+            <div class="data-row">
+                <span class="data-label">SIZE:</span>
+                <span class="data-value" id="universe-size">10⁻³⁵ m</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">H(z):</span>
+                <span class="data-value" id="hubble-param">∞</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">T_CMB:</span>
+                <span class="data-value" id="cmb-temp">1.417×10³² K</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">DENSITY:</span>
+                <span class="data-value" id="density">Critical</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Ω_m:</span>
+                <span class="data-value" id="omega-m">0.3111</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Ω_Λ:</span>
+                <span class="data-value" id="omega-lambda">0.6889</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">SCENARIO:</span>
+                <span class="data-value" id="future-scenario">Standard ΛCDM</span>
+            </div>
+            <div style="margin-top: 8px;">└────────────────────────────────┘</div>
+        </div>
+
+        <div id="physics-status" class="ui-panel">
+            <div class="section-title">┌─ PHYSICS ENGINE ──────────────┐</div>
+            <div class="data-row">
+                <span class="data-label">PARTICLES:</span>
+                <span class="data-value" id="particle-count">0</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">VISIBLE:</span>
+                <span class="data-value" id="visible-count">0</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">CLUSTERS:</span>
+                <span class="data-value" id="cluster-count">0</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">AVG TEMP:</span>
+                <span class="data-value" id="avg-temp">0 K</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">ENERGY:</span>
+                <span class="data-value" id="total-energy">0 J</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">METHOD:</span>
+                <span class="data-value">Verlet</span>
+            </div>
+            <div style="margin-top: 8px;">└────────────────────────────────┘</div>
+        </div>
+
+        <div id="performance-metrics" class="ui-panel">
+            <div class="section-title">┌─ PERFORMANCE ─────────────────┐</div>
+            <div class="data-row">
+                <span class="data-label">FPS:</span>
+                <span class="data-value" id="fps">60</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">FRAME TIME:</span>
+                <span class="data-value" id="frame-time">16.7 ms</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">PHYSICS:</span>
+                <span class="data-value" id="physics-time">0 ms</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">RENDER:</span>
+                <span class="data-value" id="render-time">0 ms</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">QUALITY:</span>
+                <span class="data-value" id="quality-level">High</span>
+            </div>
+            <div style="margin-top: 8px;">└────────────────────────────────┘</div>
+        </div>
+
+        <div id="controls-help" class="ui-panel">
+            <div class="section-title">┌─ CONTROLS ────────────────────────┐</div>
+            <div style="font-size: 10px; line-height: 1.4;">
+                <div><span class="data-label">TOUCH:</span> Drag=Pan, Pinch=Zoom, 2-Finger-Rotate</div>
+                <div><span class="data-label">MOUSE:</span> Drag=Rotate, Scroll=Zoom, Right=Pan</div>
+                <div><span class="data-label">SPACE:</span> Play/Pause │ <span class="data-label">[/]:</span> Speed ±</div>
+                <div><span class="data-label">R:</span> Reset View │ <span class="data-label">H:</span> Toggle UI</div>
+            </div>
+            <div style="margin-top: 8px;">└────────────────────────────────────┘</div>
+        </div>
+    </div>
+
+    <script src="simulator.js"></script>
+</body>
+</html>
