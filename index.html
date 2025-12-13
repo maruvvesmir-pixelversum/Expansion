@@ -9,20 +9,19 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: 'Courier New', Consolas, Monaco, monospace;
             background: #000;
             color: #fff;
+            font-family: 'Courier New', Consolas, Monaco, monospace;
             overflow: hidden;
-            width: 100vw;
-            height: 100vh;
+            font-size: 11px;
+            touch-action: none;
         }
 
+        /* Canvas layers */
         #canvas-container {
             position: fixed;
             top: 0;
@@ -32,153 +31,188 @@
             z-index: 1;
         }
 
-        canvas {
-            display: block;
+        #canvas-main, #canvas-effects, #canvas-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            background: #000;
         }
 
-        #ui-container {
+        #canvas-main { z-index: 1; }
+        #canvas-effects { z-index: 2; pointer-events: none; }
+        #canvas-ui { z-index: 3; pointer-events: none; }
+
+        #ui-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
             z-index: 10;
-            font-size: 12px;
+            pointer-events: none;
         }
 
         .ui-panel {
             pointer-events: auto;
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid #666;
-            padding: 8px;
+            background: rgba(0, 0, 0, 0.88);
+            border: 1px solid #444;
+            padding: 6px 8px;
             margin: 4px;
+            backdrop-filter: blur(2px);
         }
 
+        .ui-panel:hover {
+            border-color: #555;
+        }
+
+        /* Header */
         #header {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             border-bottom: 2px solid #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
             background: rgba(0, 0, 0, 0.95);
         }
 
-        #temporal-nav {
-            position: absolute;
-            top: 60px;
-            left: 0;
-            width: 450px;
-            max-width: calc(100vw - 8px);
+        #header .title {
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
         }
 
-        #cosmological-state {
+        #header .session-info {
+            color: #888;
+            font-size: 10px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-indicator::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #444;
+        }
+
+        .status-indicator.active::before {
+            background: #888;
+            box-shadow: 0 0 4px #888;
+        }
+
+        /* Left Panel */
+        #left-panel {
             position: absolute;
-            top: 60px;
+            top: 50px;
+            left: 0;
+            width: 340px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #444 #000;
+        }
+
+        #left-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #left-panel::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        #left-panel::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+
+        /* Right Panel */
+        #right-panel {
+            position: absolute;
+            top: 50px;
             right: 0;
-            width: 350px;
-            max-width: calc(100vw - 8px);
+            width: 300px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #444 #000;
         }
 
-        #physics-status {
-            position: absolute;
-            top: 260px;
-            left: 0;
-            width: 350px;
-            max-width: calc(100vw - 8px);
+        #right-panel::-webkit-scrollbar {
+            width: 6px;
         }
 
-        #performance-metrics {
+        #right-panel::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        #right-panel::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+
+        /* Bottom Panel */
+        #bottom-panel {
             position: absolute;
             bottom: 0;
-            right: 0;
-            width: 350px;
-            max-width: calc(100vw - 8px);
+            left: 340px;
+            right: 300px;
+            background: rgba(0, 0, 0, 0.95);
+            border-top: 1px solid #444;
         }
 
-        #controls-help {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 450px;
-            max-width: calc(100vw - 8px);
+        /* Panel Sections */
+        .panel-section {
+            border-bottom: 1px solid #222;
+            padding: 6px 0;
         }
 
-        .timeline-bar {
-            width: 100%;
-            height: 30px;
-            background: #222;
-            border: 1px solid #666;
-            position: relative;
-            margin: 8px 0;
+        .panel-section:last-child {
+            border-bottom: none;
+        }
+
+        .panel-header {
+            color: #888;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             cursor: pointer;
+            padding: 2px 0;
         }
 
-        .timeline-progress {
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            background: #fff;
-            pointer-events: none;
+        .panel-header:hover {
+            color: #aaa;
         }
 
-        .timeline-marker {
-            position: absolute;
-            top: 0;
-            width: 2px;
-            height: 100%;
-            background: #aaa;
+        .panel-header .collapse-icon {
+            font-size: 8px;
+            transition: transform 0.2s;
         }
 
-        .timeline-handle {
-            position: absolute;
-            top: -5px;
-            width: 20px;
-            height: 40px;
-            background: #fff;
-            border: 2px solid #666;
-            margin-left: -10px;
-            cursor: grab;
+        .panel-section.collapsed .panel-content {
+            display: none;
         }
 
-        .timeline-handle:active {
-            cursor: grabbing;
+        .panel-section.collapsed .collapse-icon {
+            transform: rotate(-90deg);
         }
 
-        button {
-            background: #333;
-            color: #fff;
-            border: 1px solid #666;
-            padding: 6px 12px;
-            margin: 2px;
-            cursor: pointer;
-            font-family: 'Courier New', Consolas, Monaco, monospace;
-            font-size: 11px;
-        }
-
-        button:hover {
-            background: #555;
-        }
-
-        button:active {
-            background: #222;
-        }
-
-        button.active {
-            background: #fff;
-            color: #000;
-        }
-
-        select, input[type="range"], input[type="number"] {
-            background: #222;
-            color: #fff;
-            border: 1px solid #666;
-            padding: 4px;
-            font-family: 'Courier New', Consolas, Monaco, monospace;
+        .panel-content {
             font-size: 11px;
         }
 
@@ -186,298 +220,1399 @@
             display: flex;
             justify-content: space-between;
             padding: 2px 0;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #111;
+        }
+
+        .data-row:last-child {
+            border-bottom: none;
         }
 
         .data-label {
-            color: #aaa;
+            color: #666;
         }
 
         .data-value {
-            color: #fff;
+            color: #ccc;
             font-weight: bold;
         }
 
-        .section-title {
-            font-weight: bold;
+        .data-value.highlight {
             color: #fff;
-            margin: 8px 0 4px 0;
-            padding-bottom: 4px;
-            border-bottom: 1px solid #666;
         }
 
-        .button-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin: 8px 0;
+        .data-value.warning {
+            color: #aa8;
         }
 
-        #loading-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
+        .data-value.critical {
+            color: #a88;
+        }
+
+        /* Mini graphs */
+        .mini-graph {
+            height: 40px;
+            background: #111;
+            border: 1px solid #222;
+            margin: 4px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mini-graph canvas {
             width: 100%;
             height: 100%;
-            background: #000;
+        }
+
+        .mini-graph-label {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 8px;
+            color: #555;
+        }
+
+        /* Timeline */
+        #timeline {
+            padding: 8px 12px;
+        }
+
+        #timeline-header {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            flex-direction: column;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 10px;
         }
 
-        #loading-screen.hidden {
-            display: none;
-        }
-
-        .loading-text {
-            font-size: 18px;
-            margin: 20px;
-            text-align: center;
-        }
-
-        .loading-bar {
-            width: 400px;
-            max-width: 80vw;
-            height: 30px;
-            border: 1px solid #666;
-            background: #222;
+        #timeline-bar {
+            width: 100%;
+            height: 24px;
+            background: #111;
+            border: 1px solid #333;
             position: relative;
+            margin: 8px 0;
+            cursor: pointer;
         }
 
-        .loading-bar-fill {
+        #timeline-progress {
+            height: 100%;
+            background: linear-gradient(to right, #222, #333);
             position: absolute;
             left: 0;
             top: 0;
+            transition: width 0.1s;
+        }
+
+        #timeline-marker {
+            width: 2px;
             height: 100%;
             background: #fff;
+            position: absolute;
+            top: 0;
+            box-shadow: 0 0 6px rgba(255,255,255,0.5);
+        }
+
+        .epoch-markers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+        }
+
+        .epoch-marker {
+            position: absolute;
+            top: 0;
+            width: 1px;
+            height: 100%;
+            background: #333;
+        }
+
+        .epoch-marker-label {
+            position: absolute;
+            top: -12px;
+            font-size: 7px;
+            color: #444;
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
+
+        #time-controls {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .time-btn {
+            background: #181818;
+            border: 1px solid #333;
+            color: #888;
+            padding: 5px 14px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            transition: all 0.15s;
+        }
+
+        .time-btn:hover {
+            background: #222;
+            border-color: #444;
+            color: #aaa;
+        }
+
+        .time-btn.active {
+            background: #333;
+            border-color: #555;
+            color: #fff;
+        }
+
+        /* Progress bars */
+        .progress-bar {
+            height: 8px;
+            background: #111;
+            border: 1px solid #222;
+            margin: 2px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, #333, #555);
             transition: width 0.3s;
         }
 
-        @media (max-width: 900px) {
-            #temporal-nav, #cosmological-state, #physics-status,
-            #performance-metrics, #controls-help {
-                position: relative;
-                width: 100%;
-                max-width: 100%;
-                margin: 4px 0;
-            }
-
-            #ui-container {
-                overflow-y: auto;
-                pointer-events: auto;
-            }
-
-            .ui-panel {
-                position: relative !important;
-            }
+        /* Histogram */
+        .histogram {
+            display: flex;
+            align-items: flex-end;
+            height: 35px;
+            gap: 1px;
+            margin: 4px 0;
+            background: #0a0a0a;
+            padding: 2px;
+            border: 1px solid #1a1a1a;
         }
 
-        .hidden {
-            display: none !important;
+        .histogram-bar {
+            flex: 1;
+            background: linear-gradient(to top, #333, #555);
+            min-width: 3px;
+            transition: height 0.2s;
         }
 
+        /* Sparkline */
+        .sparkline {
+            height: 20px;
+            display: flex;
+            align-items: flex-end;
+            gap: 1px;
+        }
+
+        .sparkline-bar {
+            width: 2px;
+            background: #444;
+        }
+
+        /* Key hints */
+        .key {
+            display: inline-block;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 1px 5px;
+            font-size: 9px;
+            margin: 0 2px;
+            border-radius: 2px;
+        }
+
+        /* Collapsed UI mode */
+        #collapsed-ui {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid #444;
+            padding: 8px 20px;
+            display: none;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+
+        body.ui-collapsed #left-panel,
+        body.ui-collapsed #right-panel,
+        body.ui-collapsed #bottom-panel,
+        body.ui-collapsed #header {
+            display: none;
+        }
+
+        body.ui-collapsed #collapsed-ui {
+            display: block;
+        }
+
+        /* Touch controls */
+        #touch-controls {
+            position: absolute;
+            bottom: 100px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: auto;
+        }
+
+        .touch-btn {
+            width: 54px;
+            height: 54px;
+            background: rgba(30, 30, 30, 0.9);
+            border: 1px solid #444;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s;
+        }
+
+        .touch-btn:active {
+            background: rgba(60, 60, 60, 0.95);
+            transform: scale(0.95);
+        }
+
+        .touch-btn-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Settings Panel */
+        #settings-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.98);
+            border: 2px solid #444;
+            padding: 20px;
+            width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+            z-index: 200;
+        }
+
+        #settings-panel.visible {
+            display: block;
+        }
+
+        .settings-group {
+            margin-bottom: 16px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 12px;
+        }
+
+        .settings-group h3 {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 6px 0;
+        }
+
+        .setting-row label {
+            color: #aaa;
+            font-size: 11px;
+        }
+
+        .setting-row input[type="range"] {
+            width: 120px;
+            accent-color: #666;
+        }
+
+        .setting-row input[type="number"] {
+            width: 80px;
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 3px 6px;
+            font-family: inherit;
+        }
+
+        .setting-row select {
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 3px 8px;
+            font-family: inherit;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 20px;
+            background: #222;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .toggle-switch.active {
+            background: #444;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: #888;
+            border-radius: 50%;
+            transition: left 0.2s;
+        }
+
+        .toggle-switch.active::after {
+            left: 22px;
+            background: #fff;
+        }
+
+        /* Epoch info popup */
         #epoch-info {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 24px;
-            font-weight: bold;
+            background: rgba(0, 0, 0, 0.97);
+            border: 2px solid #555;
+            padding: 24px 36px;
             text-align: center;
-            pointer-events: none;
-            text-shadow: 0 0 10px #000, 0 0 20px #000;
             opacity: 0;
-            transition: opacity 0.5s;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 100;
+            max-width: 450px;
         }
 
         #epoch-info.visible {
             opacity: 1;
         }
+
+        #epoch-info h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+
+        #epoch-info .epoch-time {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        #epoch-info p {
+            color: #999;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        /* Particle info tooltip */
+        #particle-info {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid #444;
+            padding: 10px;
+            font-size: 10px;
+            pointer-events: none;
+            display: none;
+            z-index: 150;
+        }
+
+        #particle-info.visible {
+            display: block;
+        }
+
+        /* Tracer panel */
+        #tracer-panel {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid #444;
+            padding: 8px 16px;
+            display: none;
+            z-index: 50;
+        }
+
+        #tracer-panel.visible {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        /* Bookmarks */
+        #bookmarks-list {
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .bookmark-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            border-bottom: 1px solid #111;
+            font-size: 10px;
+        }
+
+        .bookmark-item:hover {
+            background: #111;
+        }
+
+        .bookmark-jump {
+            color: #666;
+            cursor: pointer;
+        }
+
+        .bookmark-jump:hover {
+            color: #aaa;
+        }
+
+        /* Help modal */
+        #help-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.97);
+            z-index: 1000;
+            display: none;
+            overflow-y: auto;
+            padding: 40px;
+        }
+
+        #help-modal.visible {
+            display: block;
+        }
+
+        #help-modal h1 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        #help-modal h2 {
+            font-size: 13px;
+            margin: 24px 0 12px;
+            color: #888;
+            border-bottom: 1px solid #333;
+            padding-bottom: 6px;
+        }
+
+        #help-modal .shortcuts {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 8px;
+        }
+
+        #help-modal .shortcut {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #222;
+            border: 1px solid #444;
+            color: #aaa;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .close-btn:hover {
+            background: #333;
+            color: #fff;
+        }
+
+        /* Screenshot flash */
+        #screenshot-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10000;
+            transition: opacity 0.1s;
+        }
+
+        #screenshot-flash.flash {
+            opacity: 0.3;
+        }
+
+        /* Loading screen */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #000;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #loading.hidden {
+            display: none;
+        }
+
+        #loading h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            letter-spacing: 3px;
+        }
+
+        #loading .subtitle {
+            font-size: 11px;
+            color: #555;
+            margin-bottom: 30px;
+            letter-spacing: 1px;
+        }
+
+        #loading-bar {
+            width: 350px;
+            height: 3px;
+            background: #111;
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+
+        #loading-progress {
+            height: 100%;
+            background: linear-gradient(to right, #444, #888);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        #loading-status {
+            margin-top: 14px;
+            color: #555;
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+
+        /* Notification toast */
+        #notification {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid #444;
+            padding: 10px 24px;
+            font-size: 11px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 500;
+        }
+
+        #notification.visible {
+            opacity: 1;
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 900px) {
+            #left-panel {
+                width: 240px;
+                font-size: 9px;
+            }
+
+            #right-panel {
+                width: 200px;
+                font-size: 9px;
+            }
+
+            #bottom-panel {
+                left: 240px;
+                right: 200px;
+            }
+
+            .ui-panel {
+                padding: 4px 6px;
+            }
+        }
+
+        @media (max-width: 700px) {
+            #left-panel, #right-panel {
+                display: none;
+            }
+
+            #bottom-panel {
+                left: 0;
+                right: 0;
+            }
+
+            #touch-controls {
+                display: flex;
+            }
+        }
+
+        @media (min-width: 701px) {
+            #touch-controls {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
-    <div id="loading-screen">
-        <div class="loading-text">UNIVERSE EVOLUTION SIMULATOR v2.47.3</div>
-        <div class="loading-text">Initializing Physics Engine...</div>
-        <div class="loading-bar">
-            <div class="loading-bar-fill" id="loading-progress"></div>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <h1>UNIVERSE EVOLUTION SIMULATOR</h1>
+        <div class="subtitle">Anthropic Cosmological Research Institute</div>
+        <div id="loading-bar">
+            <div id="loading-progress"></div>
         </div>
-        <div class="loading-text" id="loading-status">Starting...</div>
+        <div id="loading-status">Initializing quantum foam...</div>
     </div>
 
+    <!-- Screenshot Flash -->
+    <div id="screenshot-flash"></div>
+
+    <!-- Canvas Container -->
     <div id="canvas-container">
-        <canvas id="universe-canvas"></canvas>
+        <canvas id="canvas-main"></canvas>
+        <canvas id="canvas-effects"></canvas>
+        <canvas id="canvas-ui"></canvas>
     </div>
 
-    <div id="epoch-info"></div>
+    <!-- Notification Toast -->
+    <div id="notification"></div>
 
-    <div id="ui-container">
+    <!-- UI Overlay -->
+    <div id="ui-overlay">
+        <!-- Header -->
         <div id="header" class="ui-panel">
-            <div style="font-size: 14px; font-weight: bold;">╔═══════════════════════════════════════════════════════════╗</div>
-            <div style="font-size: 14px; font-weight: bold;">║ UNIVERSE EVOLUTION SIMULATOR v2.47.3                     ║</div>
-            <div style="font-size: 14px; font-weight: bold;">╚═══════════════════════════════════════════════════════════╝</div>
+            <div class="title">UNIVERSE EVOLUTION SIMULATOR v2.47.3</div>
+            <div class="session-info">
+                <span id="session-id">SIM_00000000_000000</span>
+                <span class="status-indicator active" id="status-physics">PHYSICS</span>
+                <span class="status-indicator active" id="status-render">RENDER</span>
+                <span id="fps-counter">60 FPS</span>
+                <span id="particle-count">0 particles</span>
+            </div>
         </div>
 
-        <div id="temporal-nav" class="ui-panel">
-            <div class="section-title">┌─ TEMPORAL NAVIGATION ─────────────────┐</div>
-            <div class="data-row">
-                <span class="data-label">TIME:</span>
-                <span class="data-value" id="current-time">0.000 s</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">EPOCH:</span>
-                <span class="data-value" id="current-epoch">Planck Epoch</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">REDSHIFT:</span>
-                <span class="data-value" id="redshift">z = ∞</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">SCALE FACTOR:</span>
-                <span class="data-value" id="scale-factor">a = 0.00</span>
-            </div>
-
-            <div class="timeline-bar" id="timeline-bar">
-                <div class="timeline-progress" id="timeline-progress"></div>
-                <div class="timeline-handle" id="timeline-handle"></div>
-            </div>
-
-            <div class="button-row">
-                <button id="btn-play-pause">► PLAY</button>
-                <button id="btn-reset">⟲ RESET</button>
-                <button id="btn-slower">◄◄ SLOWER</button>
-                <button id="btn-faster">FASTER ►►</button>
-            </div>
-
-            <div class="data-row">
-                <span class="data-label">TIME SPEED:</span>
-                <span class="data-value" id="time-speed">×1.0E+6</span>
+        <!-- Left Panel -->
+        <div id="left-panel">
+            <!-- Temporal Navigation -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        TEMPORAL NAVIGATION <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">TIME:</span>
+                            <span class="data-value highlight" id="current-time">0.000 s</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">EPOCH:</span>
+                            <span class="data-value" id="current-epoch">Planck Era</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">REDSHIFT z:</span>
+                            <span class="data-value" id="redshift">∞</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">SCALE FACTOR a:</span>
+                            <span class="data-value" id="scale-factor">0.0000</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">LOOKBACK TIME:</span>
+                            <span class="data-value" id="lookback-time">13.8 Gyr</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="section-title">QUICK JUMP TO EPOCH:</div>
-            <div class="button-row">
-                <button class="epoch-btn" data-epoch="planck">Planck</button>
-                <button class="epoch-btn" data-epoch="inflation">Inflation</button>
-                <button class="epoch-btn" data-epoch="qgp">QGP</button>
-                <button class="epoch-btn" data-epoch="nucleosynthesis">Nucleosyn.</button>
-                <button class="epoch-btn" data-epoch="recombination">Recombin.</button>
-                <button class="epoch-btn" data-epoch="darkages">Dark Ages</button>
-                <button class="epoch-btn" data-epoch="firststars">First Stars</button>
-                <button class="epoch-btn" data-epoch="modern">Modern</button>
-                <button class="epoch-btn" data-epoch="present">Present</button>
+            <!-- Cosmological State -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        COSMOLOGICAL STATE <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">UNIVERSE SIZE:</span>
+                            <span class="data-value" id="universe-size">10⁻³⁵ m</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">H(z):</span>
+                            <span class="data-value" id="hubble-rate">∞ km/s/Mpc</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">T_CMB:</span>
+                            <span class="data-value" id="cmb-temp">1.417×10³² K</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">DENSITY:</span>
+                            <span class="data-value" id="density">∞ kg/m³</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">EXPANSION RATE:</span>
+                            <span class="data-value" id="expansion-rate">Accelerating</span>
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <div class="data-label">SCALE FACTOR HISTORY:</div>
+                            <div class="mini-graph">
+                                <canvas id="graph-scale"></canvas>
+                                <span class="mini-graph-label">a(t)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="section-title" style="margin-top: 12px;">FUTURE SCENARIOS:</div>
-            <div class="button-row">
-                <button class="epoch-btn" data-epoch="bigfreeze">Big Freeze</button>
-                <button class="epoch-btn" data-epoch="bigrip">Big Rip</button>
-                <button class="epoch-btn" data-epoch="bigcrunch">Big Crunch</button>
-                <button class="epoch-btn" data-epoch="bigbounce">Big Bounce</button>
+            <!-- Particle System -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        PARTICLE SYSTEM <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">TOTAL:</span>
+                            <span class="data-value" id="total-particles">500,000</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">VISIBLE:</span>
+                            <span class="data-value" id="visible-particles">500,000</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">CLUSTERS:</span>
+                            <span class="data-value" id="cluster-count">0</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">IN CLUSTERS:</span>
+                            <span class="data-value" id="clustered-particles">0%</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">AVG TEMP:</span>
+                            <span class="data-value" id="avg-temp">10³² K</span>
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <div class="data-label">TEMPERATURE DISTRIBUTION:</div>
+                            <div class="histogram" id="temp-histogram"></div>
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <div class="data-label">COLOR COMPOSITION:</div>
+                            <div class="data-row">
+                                <span class="data-label">Blue (hot):</span>
+                                <span class="data-value" id="blue-pct">0%</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="data-label">White:</span>
+                                <span class="data-value" id="white-pct">100%</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="data-label">Yellow:</span>
+                                <span class="data-value" id="yellow-pct">0%</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="data-label">Red (cool):</span>
+                                <span class="data-value" id="red-pct">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div style="margin-top: 4px;">└───────────────────────────────────────┘</div>
+
+            <!-- Physics Engine -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        PHYSICS ENGINE <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">INTEGRATION:</span>
+                            <span class="data-value">Velocity Verlet</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">TIMESTEP:</span>
+                            <span class="data-value" id="timestep">Adaptive</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">GRAVITY:</span>
+                            <span class="data-value">Barnes-Hut O(N log N)</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">THETA:</span>
+                            <span class="data-value" id="theta-value">0.5</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">SOFTENING:</span>
+                            <span class="data-value">1.0 kpc</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">ENERGY DRIFT:</span>
+                            <span class="data-value" id="energy-drift">0.0000%</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">VIRIAL RATIO:</span>
+                            <span class="data-value" id="virial-ratio">2T/|U| = 0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thermodynamics -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        THERMODYNAMICS <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">T_MIN:</span>
+                            <span class="data-value" id="temp-min">2.7 K</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">T_MAX:</span>
+                            <span class="data-value" id="temp-max">10³² K</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">T_MEDIAN:</span>
+                            <span class="data-value" id="temp-median">10²⁰ K</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">LUMINOSITY:</span>
+                            <span class="data-value" id="luminosity">0 L☉</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">ENTROPY:</span>
+                            <span class="data-value" id="entropy">Increasing</span>
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <div class="data-label">TEMPERATURE HISTORY:</div>
+                            <div class="mini-graph">
+                                <canvas id="graph-temp"></canvas>
+                                <span class="mini-graph-label">T(t)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Density Field -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        DENSITY FIELD <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">MEAN DENSITY:</span>
+                            <span class="data-value" id="mean-density">ρ_crit</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">OVERDENSITY:</span>
+                            <span class="data-value" id="overdensity">δ = 0.000</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">SIGMA_8:</span>
+                            <span class="data-value" id="sigma8">0.811</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">JEANS LENGTH:</span>
+                            <span class="data-value" id="jeans-length">N/A</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">TOPOLOGY:</span>
+                            <span class="data-value" id="topology">Homogeneous</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bookmarks -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        BOOKMARKS <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div id="bookmarks-list">
+                            <div style="color: #444; font-size: 10px;">Press B to add bookmark</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div id="cosmological-state" class="ui-panel">
-            <div class="section-title">┌─ COSMOLOGICAL STATE ──────────┐</div>
-            <div class="data-row">
-                <span class="data-label">SIZE:</span>
-                <span class="data-value" id="universe-size">10⁻³⁵ m</span>
+        <!-- Right Panel -->
+        <div id="right-panel">
+            <!-- Camera Controls -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        CAMERA <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">POSITION:</span>
+                            <span class="data-value" id="camera-pos">(0, 0, 100)</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">ZOOM:</span>
+                            <span class="data-value" id="camera-zoom">1.00x</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">ROTATION:</span>
+                            <span class="data-value" id="camera-rot">(0°, 0°)</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">FOV:</span>
+                            <span class="data-value" id="camera-fov">60°</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">VIEW SCALE:</span>
+                            <span class="data-value" id="view-scale">1 Mpc</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">H(z):</span>
-                <span class="data-value" id="hubble-param">∞</span>
+
+            <!-- Cosmological Parameters -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        COSMOLOGICAL PARAMETERS <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">H₀:</span>
+                            <span class="data-value">67.4 km/s/Mpc</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Ω_Λ:</span>
+                            <span class="data-value">0.6889</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Ω_m:</span>
+                            <span class="data-value">0.3111</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Ω_b:</span>
+                            <span class="data-value">0.0486</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Ω_DM:</span>
+                            <span class="data-value">0.2625</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Ω_r:</span>
+                            <span class="data-value">9.24×10⁻⁵</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">w:</span>
+                            <span class="data-value" id="eos-param">-1.03</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">n_s:</span>
+                            <span class="data-value">0.9649</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">T_CMB:</span>
-                <span class="data-value" id="cmb-temp">1.417×10³² K</span>
+
+            <!-- Visual Effects -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        VISUAL EFFECTS <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">BLOOM:</span>
+                            <span class="data-value" id="fx-bloom">ON</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">MOTION BLUR:</span>
+                            <span class="data-value" id="fx-motion">ON</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">FILM GRAIN:</span>
+                            <span class="data-value" id="fx-grain">ON</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">VIGNETTE:</span>
+                            <span class="data-value" id="fx-vignette">ON</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">COSMIC WEB:</span>
+                            <span class="data-value" id="fx-web">OFF</span>
+                        </div>
+                        <div style="margin-top: 6px; font-size: 9px; color: #444;">
+                            Press <span class="key">P</span> for settings
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">DENSITY:</span>
-                <span class="data-value" id="density">Critical</span>
+
+            <!-- Performance -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        PERFORMANCE <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">FPS:</span>
+                            <span class="data-value" id="perf-fps">60.0</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">FRAME TIME:</span>
+                            <span class="data-value" id="frame-time">16.7 ms</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">PHYSICS:</span>
+                            <span class="data-value" id="physics-time">8.2 ms</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">RENDER:</span>
+                            <span class="data-value" id="render-time">5.4 ms</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">EFFECTS:</span>
+                            <span class="data-value" id="effects-time">2.0 ms</span>
+                        </div>
+                        <div style="margin-top: 4px;">
+                            <div class="data-label">GPU LOAD:</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="gpu-bar" style="width: 45%"></div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 4px;">
+                            <div class="data-label">MEMORY:</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="mem-bar" style="width: 35%"></div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <div class="data-label">FPS HISTORY:</div>
+                            <div class="mini-graph">
+                                <canvas id="graph-fps"></canvas>
+                                <span class="mini-graph-label">FPS</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">Ω_m:</span>
-                <span class="data-value" id="omega-m">0.3111</span>
+
+            <!-- Future Scenario -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        FUTURE SCENARIO <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="data-row">
+                            <span class="data-label">MODE:</span>
+                            <span class="data-value highlight" id="future-mode">Big Freeze</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">EOS PARAM:</span>
+                            <span class="data-value" id="future-w">w = -1.0</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">STATUS:</span>
+                            <span class="data-value" id="future-status">Active</span>
+                        </div>
+                        <div id="future-desc" style="margin-top: 6px; font-size: 9px; color: #555;">
+                            Eternal expansion. Heat death. Maximum entropy.
+                        </div>
+                        <div style="margin-top: 6px; font-size: 9px; color: #444;">
+                            Press <span class="key">F</span> to cycle scenarios
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">Ω_Λ:</span>
-                <span class="data-value" id="omega-lambda">0.6889</span>
+
+            <!-- Quick Controls -->
+            <div class="ui-panel">
+                <div class="panel-section">
+                    <div class="panel-header" onclick="toggleSection(this)">
+                        QUICK CONTROLS <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="panel-content" style="font-size: 9px; color: #666;">
+                        <div><span class="key">SPACE</span> Play/Pause</div>
+                        <div><span class="key">[ ]</span> Speed ±</div>
+                        <div><span class="key">R</span> Reset View</div>
+                        <div><span class="key">H</span> Toggle UI</div>
+                        <div><span class="key">G</span> Toggle Grid</div>
+                        <div><span class="key">V</span> Velocity Vectors</div>
+                        <div><span class="key">W</span> Cosmic Web</div>
+                        <div><span class="key">P</span> Settings</div>
+                        <div><span class="key">B</span> Add Bookmark</div>
+                        <div><span class="key">S</span> Screenshot</div>
+                        <div><span class="key">F1</span> Help</div>
+                        <div><span class="key">1-9</span> Jump Epoch</div>
+                    </div>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">SCENARIO:</span>
-                <span class="data-value" id="future-scenario">Standard ΛCDM</span>
-            </div>
-            <div style="margin-top: 8px;">└────────────────────────────────┘</div>
         </div>
 
-        <div id="physics-status" class="ui-panel">
-            <div class="section-title">┌─ PHYSICS ENGINE ──────────────┐</div>
-            <div class="data-row">
-                <span class="data-label">PARTICLES:</span>
-                <span class="data-value" id="particle-count">0</span>
+        <!-- Bottom Panel -->
+        <div id="bottom-panel">
+            <div id="timeline">
+                <div id="timeline-header">
+                    <span id="time-display">t = 0.000 s</span>
+                    <span id="epoch-display">PLANCK ERA</span>
+                    <span id="speed-display">Speed: ×1</span>
+                </div>
+                <div id="timeline-bar">
+                    <div class="epoch-markers" id="epoch-markers"></div>
+                    <div id="timeline-progress" style="width: 0%"></div>
+                    <div id="timeline-marker" style="left: 0%"></div>
+                </div>
+                <div id="time-controls">
+                    <button class="time-btn" id="btn-rw" title="10x slower">◄◄</button>
+                    <button class="time-btn" id="btn-slow" title="2x slower">◄</button>
+                    <button class="time-btn active" id="btn-play" title="Play/Pause">▶</button>
+                    <button class="time-btn" id="btn-fast" title="2x faster">►</button>
+                    <button class="time-btn" id="btn-ff" title="10x faster">►►</button>
+                    <button class="time-btn" id="btn-reverse" title="Reverse time">⟲</button>
+                    <button class="time-btn" id="btn-reset" title="Reset simulation">↺</button>
+                </div>
             </div>
-            <div class="data-row">
-                <span class="data-label">VISIBLE:</span>
-                <span class="data-value" id="visible-count">0</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">CLUSTERS:</span>
-                <span class="data-value" id="cluster-count">0</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">AVG TEMP:</span>
-                <span class="data-value" id="avg-temp">0 K</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">ENERGY:</span>
-                <span class="data-value" id="total-energy">0 J</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">METHOD:</span>
-                <span class="data-value">Verlet</span>
-            </div>
-            <div style="margin-top: 8px;">└────────────────────────────────┘</div>
         </div>
 
-        <div id="performance-metrics" class="ui-panel">
-            <div class="section-title">┌─ PERFORMANCE ─────────────────┐</div>
-            <div class="data-row">
-                <span class="data-label">FPS:</span>
-                <span class="data-value" id="fps">60</span>
+        <!-- Touch Controls -->
+        <div id="touch-controls">
+            <button class="touch-btn" id="touch-settings" title="Settings">⚙</button>
+            <button class="touch-btn" id="touch-zoomin" title="Zoom in">+</button>
+            <button class="touch-btn" id="touch-zoomout" title="Zoom out">−</button>
+            <div class="touch-btn-row">
+                <button class="touch-btn" id="touch-play" title="Play/Pause">▶</button>
+                <button class="touch-btn" id="touch-reset" title="Reset view">⟲</button>
             </div>
-            <div class="data-row">
-                <span class="data-label">FRAME TIME:</span>
-                <span class="data-value" id="frame-time">16.7 ms</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">PHYSICS:</span>
-                <span class="data-value" id="physics-time">0 ms</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">RENDER:</span>
-                <span class="data-value" id="render-time">0 ms</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">QUALITY:</span>
-                <span class="data-value" id="quality-level">High</span>
-            </div>
-            <div style="margin-top: 8px;">└────────────────────────────────┘</div>
         </div>
 
-        <div id="controls-help" class="ui-panel">
-            <div class="section-title">┌─ CONTROLS ────────────────────────┐</div>
-            <div style="font-size: 10px; line-height: 1.4;">
-                <div><span class="data-label">TOUCH:</span> Drag=Pan, Pinch=Zoom, 2-Finger-Rotate</div>
-                <div><span class="data-label">MOUSE:</span> Drag=Rotate, Scroll=Zoom, Right=Pan</div>
-                <div><span class="data-label">SPACE:</span> Play/Pause │ <span class="data-label">[/]:</span> Speed ±</div>
-                <div><span class="data-label">R:</span> Reset View │ <span class="data-label">H:</span> Toggle UI</div>
+        <!-- Collapsed UI -->
+        <div id="collapsed-ui">
+            <span id="collapsed-time">0s</span> |
+            <span id="collapsed-epoch">Planck</span> |
+            <span id="collapsed-fps">60</span>FPS |
+            <span id="collapsed-particles">500k</span>p |
+            <span id="collapsed-speed">×1</span> |
+            <span class="key">H</span> expand
+        </div>
+
+        <!-- Tracer Panel -->
+        <div id="tracer-panel">
+            <span>TRACER MODE</span>
+            <span id="tracer-count">0/10 particles</span>
+            <span style="color: #444;">Click to select | ESC to exit</span>
+        </div>
+
+        <!-- Particle Info Tooltip -->
+        <div id="particle-info">
+            <div>ID: <span id="pi-id">0</span></div>
+            <div>Position: <span id="pi-pos">(0, 0, 0)</span></div>
+            <div>Velocity: <span id="pi-vel">(0, 0, 0)</span></div>
+            <div>Temperature: <span id="pi-temp">0 K</span></div>
+            <div>Age: <span id="pi-age">0 s</span></div>
+        </div>
+
+        <!-- Epoch Info Popup -->
+        <div id="epoch-info">
+            <h2 id="epoch-title">Planck Era</h2>
+            <div class="epoch-time" id="epoch-time-range">t = 0 - 10⁻⁴³ s</div>
+            <p id="epoch-description">The earliest period of the universe...</p>
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settings-panel">
+            <button class="close-btn" id="close-settings">Close (Esc)</button>
+            <h2 style="margin-bottom: 20px; letter-spacing: 2px;">SETTINGS</h2>
+
+            <div class="settings-group">
+                <h3>Visual Effects</h3>
+                <div class="setting-row">
+                    <label>Bloom Intensity</label>
+                    <input type="range" id="setting-bloom" min="0" max="100" value="70">
+                </div>
+                <div class="setting-row">
+                    <label>Motion Blur</label>
+                    <div class="toggle-switch active" id="toggle-motion"></div>
+                </div>
+                <div class="setting-row">
+                    <label>Film Grain</label>
+                    <div class="toggle-switch active" id="toggle-grain"></div>
+                </div>
+                <div class="setting-row">
+                    <label>Vignette</label>
+                    <div class="toggle-switch active" id="toggle-vignette"></div>
+                </div>
+                <div class="setting-row">
+                    <label>Cosmic Web Lines</label>
+                    <div class="toggle-switch" id="toggle-web"></div>
+                </div>
             </div>
-            <div style="margin-top: 8px;">└────────────────────────────────────┘</div>
+
+            <div class="settings-group">
+                <h3>Physics</h3>
+                <div class="setting-row">
+                    <label>Particle Count</label>
+                    <select id="setting-particles">
+                        <option value="100000">100k (Fast)</option>
+                        <option value="250000">250k</option>
+                        <option value="500000" selected>500k (Default)</option>
+                        <option value="1000000">1M (High)</option>
+                        <option value="2000000">2M (Very High)</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <label>Barnes-Hut Theta</label>
+                    <input type="range" id="setting-theta" min="0" max="100" value="50">
+                </div>
+                <div class="setting-row">
+                    <label>Gravity Strength</label>
+                    <input type="range" id="setting-gravity" min="0" max="200" value="100">
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>Cosmology</h3>
+                <div class="setting-row">
+                    <label>H₀ (km/s/Mpc)</label>
+                    <input type="number" id="setting-h0" value="67.4" min="50" max="80" step="0.1">
+                </div>
+                <div class="setting-row">
+                    <label>Dark Energy w</label>
+                    <input type="number" id="setting-w" value="-1.03" min="-2" max="0" step="0.01">
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>Display</h3>
+                <div class="setting-row">
+                    <label>Particle Size</label>
+                    <input type="range" id="setting-size" min="50" max="200" value="100">
+                </div>
+                <div class="setting-row">
+                    <label>Show Grid</label>
+                    <div class="toggle-switch" id="toggle-grid"></div>
+                </div>
+                <div class="setting-row">
+                    <label>Show Velocity Vectors</label>
+                    <div class="toggle-switch" id="toggle-velocity"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Modal -->
+        <div id="help-modal">
+            <button class="close-btn" id="close-help">Close (Esc)</button>
+            <h1>KEYBOARD SHORTCUTS</h1>
+
+            <h2>NAVIGATION</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span class="key">W A S D</span><span>Pan camera</span></div>
+                <div class="shortcut"><span class="key">↑ ↓ ← →</span><span>Pan camera</span></div>
+                <div class="shortcut"><span class="key">Q / E</span><span>Rotate view</span></div>
+                <div class="shortcut"><span class="key">+ / -</span><span>Zoom in/out</span></div>
+                <div class="shortcut"><span class="key">Scroll</span><span>Zoom in/out</span></div>
+                <div class="shortcut"><span class="key">R</span><span>Reset view</span></div>
+                <div class="shortcut"><span class="key">Drag</span><span>Pan view</span></div>
+                <div class="shortcut"><span class="key">Shift+Drag</span><span>Rotate 3D</span></div>
+            </div>
+
+            <h2>TIME CONTROL</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span class="key">Space</span><span>Play / Pause</span></div>
+                <div class="shortcut"><span class="key">[</span><span>Slow down 2x</span></div>
+                <div class="shortcut"><span class="key">]</span><span>Speed up 2x</span></div>
+                <div class="shortcut"><span class="key">Backspace</span><span>Reverse time</span></div>
+                <div class="shortcut"><span class="key">Enter</span><span>Step one frame</span></div>
+            </div>
+
+            <h2>EPOCH JUMPS</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span class="key">1</span><span>Planck Era (t=0)</span></div>
+                <div class="shortcut"><span class="key">2</span><span>Inflation (10⁻³⁶s)</span></div>
+                <div class="shortcut"><span class="key">3</span><span>Quark-Gluon Plasma (10⁻³²s)</span></div>
+                <div class="shortcut"><span class="key">4</span><span>Nucleosynthesis (3 min)</span></div>
+                <div class="shortcut"><span class="key">5</span><span>Recombination (380 kyr)</span></div>
+                <div class="shortcut"><span class="key">6</span><span>Dark Ages (380k yr)</span></div>
+                <div class="shortcut"><span class="key">7</span><span>First Stars (200 Myr)</span></div>
+                <div class="shortcut"><span class="key">8</span><span>Galaxy Formation (1 Gyr)</span></div>
+                <div class="shortcut"><span class="key">9</span><span>Present Day (13.8 Gyr)</span></div>
+                <div class="shortcut"><span class="key">0</span><span>Far Future</span></div>
+            </div>
+
+            <h2>VIEW & DISPLAY</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span class="key">H</span><span>Toggle UI (compact mode)</span></div>
+                <div class="shortcut"><span class="key">G</span><span>Toggle grid</span></div>
+                <div class="shortcut"><span class="key">V</span><span>Toggle velocity vectors</span></div>
+                <div class="shortcut"><span class="key">W</span><span>Toggle cosmic web</span></div>
+                <div class="shortcut"><span class="key">F</span><span>Cycle future scenarios</span></div>
+                <div class="shortcut"><span class="key">F11</span><span>Fullscreen</span></div>
+            </div>
+
+            <h2>TOOLS</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span class="key">P</span><span>Settings panel</span></div>
+                <div class="shortcut"><span class="key">T</span><span>Particle tracer mode</span></div>
+                <div class="shortcut"><span class="key">B</span><span>Add bookmark</span></div>
+                <div class="shortcut"><span class="key">S</span><span>Take screenshot</span></div>
+                <div class="shortcut"><span class="key">I</span><span>Particle info (hover)</span></div>
+                <div class="shortcut"><span class="key">F1</span><span>This help screen</span></div>
+                <div class="shortcut"><span class="key">Esc</span><span>Close dialogs</span></div>
+            </div>
+
+            <h2>TOUCH CONTROLS</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span>1-finger drag</span><span>Pan view</span></div>
+                <div class="shortcut"><span>2-finger pinch</span><span>Zoom in/out</span></div>
+                <div class="shortcut"><span>2-finger drag</span><span>Rotate 3D</span></div>
+                <div class="shortcut"><span>Double-tap</span><span>Reset view</span></div>
+                <div class="shortcut"><span>Long press</span><span>Particle info</span></div>
+            </div>
         </div>
     </div>
 
+    <script>
+        // Helper function for collapsible panels
+        function toggleSection(header) {
+            header.parentElement.classList.toggle('collapsed');
+        }
+    </script>
     <script src="simulator.js"></script>
 </body>
 </html>
