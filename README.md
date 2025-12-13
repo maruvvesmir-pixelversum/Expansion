@@ -45,10 +45,43 @@ An interactive, physics-based simulation of the universe from the Big Bang to va
 - **Scroll Wheel**: Zoom in/out
 
 #### Keyboard Shortcuts
+
+**Navigation:**
+- **WASD** / **Arrow Keys**: Pan camera
+- **Q** / **E**: Rotate camera around Z-axis
+- **+** / **-**: Zoom in/out
+
+**Time Control:**
 - **SPACE**: Play/Pause simulation
-- **[** / **]**: Decrease/Increase time speed
+- **[** / **]**: Decrease/Increase time speed (halve/double)
+- **1-9**: Set speed multiplier to ×10ⁿ (e.g., 6 = ×10⁶)
+- **0**: Reset speed to ×1
+- **Backspace**: Reverse time direction
+- **Enter**: Step forward one frame
+
+**Quick Epoch Jumps:**
+- **Shift+1**: Planck Epoch
+- **Shift+2**: Inflation
+- **Shift+3**: QGP Phase
+- **Shift+4**: Nucleosynthesis
+- **Shift+5**: Recombination
+- **Shift+6**: Dark Ages
+- **Shift+7**: First Stars
+- **Shift+8**: Structure Formation
+- **Shift+9**: Present Day
+- **Shift+0**: Big Freeze
+
+**View Presets:**
 - **R**: Reset camera view
+- **T**: Top view
+- **F**: Front view
+- **L**: Left view
+- **Home**: Return to origin
+
+**Interface:**
 - **H**: Hide/Show UI panels
+- **F5**: Restart simulation from Big Bang
+- **F11**: Toggle fullscreen
 
 ### 🖥️ Terminal-Style UI
 - **Temporal Navigation**: Timeline scrubber, epoch jumping, speed controls

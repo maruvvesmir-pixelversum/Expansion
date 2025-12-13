@@ -202,21 +202,31 @@ class ParticleSystem {
     initialize() {
         const spread = 1e20; // Initial spread (100 kpc)
         const massAvg = 1e30; // ~0.5 solar mass per particle
+        const perturbationAmplitude = 1e-5; // Density perturbation (δρ/ρ ≈ 10⁻⁵)
 
         for (let i = 0; i < this.count; i++) {
-            // Gaussian distribution for positions
-            this.x[i] = this.gaussianRandom() * spread;
-            this.y[i] = this.gaussianRandom() * spread;
-            this.z[i] = this.gaussianRandom() * spread;
+            // Base Gaussian distribution for positions
+            let baseX = this.gaussianRandom() * spread;
+            let baseY = this.gaussianRandom() * spread;
+            let baseZ = this.gaussianRandom() * spread;
 
-            // Small initial velocities (thermal)
+            // Add density perturbations (simulating primordial fluctuations)
+            const perturbScale = spread * 0.1; // Scale of perturbations
+            const perturb = this.densityPerturbation(baseX, baseY, baseZ, perturbScale);
+
+            this.x[i] = baseX + perturb.x * perturbationAmplitude * spread;
+            this.y[i] = baseY + perturb.y * perturbationAmplitude * spread;
+            this.z[i] = baseZ + perturb.z * perturbationAmplitude * spread;
+
+            // Small initial velocities (thermal) with perturbations
             const vThermal = 1000; // m/s
-            this.vx[i] = this.gaussianRandom() * vThermal;
-            this.vy[i] = this.gaussianRandom() * vThermal;
-            this.vz[i] = this.gaussianRandom() * vThermal;
+            this.vx[i] = this.gaussianRandom() * vThermal + perturb.vx * 100;
+            this.vy[i] = this.gaussianRandom() * vThermal + perturb.vy * 100;
+            this.vz[i] = this.gaussianRandom() * vThermal + perturb.vz * 100;
 
-            // Mass with variation
-            this.mass[i] = massAvg * (0.5 + Math.random() * 1.5);
+            // Mass with variation (some clustering)
+            const massVariation = 0.5 + Math.random() * 1.5 + Math.abs(perturb.x) * 0.1;
+            this.mass[i] = massAvg * massVariation;
 
             // Initial temperature (will be set by cosmology)
             this.temperature[i] = 1e32;
@@ -228,6 +238,24 @@ class ParticleSystem {
             this.colorG[i] = 255;
             this.colorB[i] = 255;
         }
+    }
+
+    densityPerturbation(x, y, z, scale) {
+        // Simplified noise-like perturbation (mimics power spectrum)
+        // In a full simulation, this would use Perlin noise or a proper power spectrum
+        const k = 2 * Math.PI / scale;
+        const phase1 = Math.sin(k * x) * Math.cos(k * y);
+        const phase2 = Math.cos(k * y) * Math.sin(k * z);
+        const phase3 = Math.sin(k * z) * Math.cos(k * x);
+
+        return {
+            x: phase1 + Math.random() * 0.5 - 0.25,
+            y: phase2 + Math.random() * 0.5 - 0.25,
+            z: phase3 + Math.random() * 0.5 - 0.25,
+            vx: phase2 * 0.1,
+            vy: phase3 * 0.1,
+            vz: phase1 * 0.1
+        };
     }
 
     gaussianRandom() {
@@ -617,8 +645,8 @@ class Renderer {
     }
 
     render(particles, cosmology) {
-        // Clear canvas
-        this.ctx.fillStyle = '#000';
+        // Fade effect for motion blur (instead of full clear)
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         this.ctx.fillRect(0, 0, this.width, this.height);
 
         // Get epoch info for special effects
@@ -703,6 +731,26 @@ class Renderer {
             this.ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
             this.ctx.fill();
         }
+
+        // Add vignette effect
+        this.applyVignette();
+    }
+
+    applyVignette() {
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+
+        const gradient = this.ctx.createRadialGradient(
+            centerX, centerY, maxRadius * 0.5,
+            centerX, centerY, maxRadius
+        );
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        gradient.addColorStop(0.7, 'rgba(0, 0, 0, 0)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.width, this.height);
     }
 }
 
@@ -978,13 +1026,57 @@ class UniverseSimulator {
     }
 
     setupKeyboard() {
+        // Track pressed keys for smooth camera movement
+        this.keysPressed = new Set();
+
         document.addEventListener('keydown', (e) => {
+            this.keysPressed.add(e.key.toLowerCase());
+
+            // Quick epoch jumps (Shift + number)
+            if (e.shiftKey) {
+                const epochMap = {
+                    '1': 'planck',
+                    '2': 'inflation',
+                    '3': 'qgp',
+                    '4': 'nucleosynthesis',
+                    '5': 'recombination',
+                    '6': 'darkages',
+                    '7': 'firststars',
+                    '8': 'structure',
+                    '9': 'present',
+                    '0': 'bigfreeze'
+                };
+                if (epochMap[e.key]) {
+                    const epoch = epochMap[e.key];
+                    if (epoch === 'bigfreeze' || epoch === 'bigrip' || epoch === 'bigcrunch' || epoch === 'bigbounce') {
+                        this.cosmology.setFutureScenario(epoch);
+                    }
+                    this.cosmology.jumpToEpoch(epoch);
+                    this.showEpochInfo(EPOCHS[epoch].name);
+                    return;
+                }
+            }
+
+            // Speed multiplier shortcuts (1-9 without shift)
+            if (!e.shiftKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
+                const multiplier = parseInt(e.key);
+                this.timeSpeed = Math.pow(10, multiplier);
+                if (this.timeSpeed > CONFIG.maxTimeSpeed) this.timeSpeed = CONFIG.maxTimeSpeed;
+                return;
+            }
+            if (!e.shiftKey && !e.ctrlKey && e.key === '0') {
+                this.timeSpeed = 1;
+                return;
+            }
+
             switch(e.key) {
                 case ' ':
                     this.running = !this.running;
                     document.getElementById('btn-play-pause').textContent = this.running ? '❚❚ PAUSE' : '► PLAY';
                     e.preventDefault();
                     break;
+
+                // Time control
                 case '[':
                     this.timeSpeed /= 2;
                     if (this.timeSpeed < 1) this.timeSpeed = 1;
@@ -993,16 +1085,126 @@ class UniverseSimulator {
                     this.timeSpeed *= 2;
                     if (this.timeSpeed > CONFIG.maxTimeSpeed) this.timeSpeed = CONFIG.maxTimeSpeed;
                     break;
+                case 'Backspace':
+                    // Reverse time
+                    this.timeSpeed *= -1;
+                    break;
+                case 'Enter':
+                    // Step forward one frame
+                    const wasRunning = this.running;
+                    this.running = true;
+                    this.update();
+                    this.running = wasRunning;
+                    break;
+
+                // View controls
                 case 'r':
                 case 'R':
                     this.input.resetCamera();
                     break;
+                case 't':
+                case 'T':
+                    // Top view
+                    this.renderer.camera.rotX = -Math.PI / 2;
+                    this.renderer.camera.rotY = 0;
+                    break;
+                case 'f':
+                case 'F':
+                    // Front view
+                    this.renderer.camera.rotX = 0;
+                    this.renderer.camera.rotY = 0;
+                    break;
+                case 'l':
+                case 'L':
+                    // Left view
+                    this.renderer.camera.rotX = 0;
+                    this.renderer.camera.rotY = Math.PI / 2;
+                    break;
+                case 'Home':
+                    this.renderer.camera.x = 0;
+                    this.renderer.camera.y = 0;
+                    this.renderer.camera.z = -5e21;
+                    break;
+
+                // UI toggles
                 case 'h':
                 case 'H':
                     document.getElementById('ui-container').classList.toggle('hidden');
                     break;
+
+                // Zoom
+                case '+':
+                case '=':
+                    this.renderer.camera.zoom *= 1.2;
+                    break;
+                case '-':
+                case '_':
+                    this.renderer.camera.zoom /= 1.2;
+                    this.renderer.camera.zoom = Math.max(0.1, this.renderer.camera.zoom);
+                    break;
+
+                // Fullscreen
+                case 'F11':
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen();
+                    } else {
+                        document.exitFullscreen();
+                    }
+                    e.preventDefault();
+                    break;
+
+                // Reset simulation
+                case 'F5':
+                    this.cosmology.time = 0;
+                    this.cosmology.scaleFactor = 1e-30;
+                    this.cosmology.updateEpoch();
+                    this.particles.initialize();
+                    this.input.resetCamera();
+                    e.preventDefault();
+                    break;
             }
         });
+
+        document.addEventListener('keyup', (e) => {
+            this.keysPressed.delete(e.key.toLowerCase());
+        });
+    }
+
+    // Process continuous keyboard input (called every frame)
+    processKeyboardMovement() {
+        const panSpeed = 5e18 / this.renderer.camera.zoom; // Adjust for zoom
+        const rotSpeed = 0.02;
+        const zoomSpeed = 0.02;
+
+        // Camera panning (WASD and arrows)
+        if (this.keysPressed.has('w') || this.keysPressed.has('arrowup')) {
+            this.renderer.camera.y -= panSpeed;
+        }
+        if (this.keysPressed.has('s') || this.keysPressed.has('arrowdown')) {
+            this.renderer.camera.y += panSpeed;
+        }
+        if (this.keysPressed.has('a') || this.keysPressed.has('arrowleft')) {
+            this.renderer.camera.x += panSpeed;
+        }
+        if (this.keysPressed.has('d') || this.keysPressed.has('arrowright')) {
+            this.renderer.camera.x -= panSpeed;
+        }
+
+        // Move up/down
+        if (this.keysPressed.has(' ') && this.keysPressed.has('shift')) {
+            this.renderer.camera.z -= panSpeed;
+        }
+        if (this.keysPressed.has('shift')) {
+            this.renderer.camera.z += panSpeed * 0.5;
+        }
+
+        // Rotation
+        if (this.keysPressed.has('q')) {
+            this.renderer.camera.rotZ -= rotSpeed;
+        }
+        if (this.keysPressed.has('e')) {
+            this.renderer.camera.rotZ += rotSpeed;
+        }
     }
 
     showEpochInfo(epochName) {
@@ -1148,6 +1350,11 @@ class UniverseSimulator {
         const avgDt = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
         this.fps = 1000 / avgDt;
         this.frameTime = avgDt;
+
+        // Process keyboard movement
+        if (this.keysPressed) {
+            this.processKeyboardMovement();
+        }
 
         // Update simulation
         this.update();
