@@ -14,6 +14,7 @@ import { Renderer } from '../rendering/Renderer.js';
 import { Camera } from '../ui/Camera.js';
 import { UIManager } from '../ui/UIManager.js';
 import { InputHandler } from '../ui/InputHandler.js';
+import { SaveManager } from '../utils/SaveManager.js';
 
 export class Simulator {
     constructor() {
@@ -35,6 +36,7 @@ export class Simulator {
         this.camera = null;
         this.ui = null;
         this.input = null;
+        this.saveManager = null;
 
         // Future scenario
         this.futureScenario = 'freeze';
