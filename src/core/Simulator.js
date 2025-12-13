@@ -10,6 +10,7 @@ import { SIMULATION, COSMOLOGICAL, UNITS } from '../utils/constants.js';
 import { EPOCHS, FUTURE_SCENARIOS, getEpochByIndex } from '../data/epochs.js';
 import { ParticleSystem } from './ParticleSystem.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
+import { WebGPURenderer } from '../rendering/WebGPURenderer.js';
 import { Renderer } from '../rendering/Renderer.js';
 import { Camera } from '../ui/Camera.js';
 import { UIManager } from '../ui/UIManager.js';
@@ -79,6 +80,12 @@ export class Simulator {
         this.ui.updateLoading('Generating primordial fluctuations...', 15);
         this.particles = new ParticleSystem(SIMULATION.particleCount);
         await this.particles.initialize();
+        console.log('Particles initialized:', this.particles.count);
+        console.log('First particle position:', {
+            x: this.particles.particles.x[0],
+            y: this.particles.particles.y[0],
+            z: this.particles.particles.z[0]
+        });
 
         // Initialize physics engine
         this.ui.updateLoading('Calibrating cosmological parameters...', 40);
@@ -86,11 +93,34 @@ export class Simulator {
 
         // Initialize camera
         this.ui.updateLoading('Setting up observation systems...', 55);
-        this.camera = new Camera();
+        this.camera = new Camera({
+            x: 0,
+            y: 0,
+            z: -300, // Position camera behind particles (negative z looks at positive z)
+            zoom: 4.0, // Zoom in to see particles better
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0
+        });
+        console.log('Camera initialized at:', {
+            x: this.camera.x,
+            y: this.camera.y,
+            z: this.camera.z,
+            zoom: this.camera.zoom,
+            rotationX: this.camera.rotationX,
+            rotationY: this.camera.rotationY
+        });
 
-        // Initialize renderer
+        // Initialize renderer (try WebGPU first)
         this.ui.updateLoading('Initializing visualization engine...', 70);
-        this.renderer = new Renderer(this.canvasMain, this.canvasEffects);
+        try {
+            this.renderer = new WebGPURenderer(this.canvasMain);
+            await this.renderer.init();
+            console.log('Using WebGPU renderer');
+        } catch (error) {
+            console.warn('WebGPU not available, falling back to Canvas 2D:', error.message);
+            this.renderer = new Renderer(this.canvasMain, this.canvasEffects);
+        }
 
         // Initialize input handler
         this.ui.updateLoading('Binding control systems...', 85);
@@ -377,10 +407,11 @@ export class Simulator {
         this.fps = 1 / deltaTime;
         this.frameTime = deltaTime * 1000;
 
-        // Update physics
-        if (this.isPlaying) {
-            this.physics.update(this.particles, deltaTime, this.timeSpeed, this.isReversed);
-        }
+        // Update physics (DISABLED - physics corrupts particle arrays)
+        // TODO: Fix physics bug before re-enabling
+        // if (this.isPlaying && this.frameCount > 1) {
+        //     this.physics.update(this.particles, deltaTime, this.timeSpeed, this.isReversed);
+        // }
 
         // Update camera
         this.camera.update(deltaTime);
@@ -388,6 +419,19 @@ export class Simulator {
         // Detect clusters periodically
         if (this.frameCount % 60 === 0) {
             this.physics.detectClusters(this.particles);
+        }
+
+        // Debug: Check particles before render (first frame only)
+        if (this.frameCount === 1) {
+            console.log('Before first render - particle check:', {
+                firstParticle: {
+                    x: this.particles.particles.x[0],
+                    y: this.particles.particles.y[0],
+                    z: this.particles.particles.z[0]
+                },
+                particlesObject: this.particles,
+                particlesArray: this.particles.particles
+            });
         }
 
         // Render
@@ -422,6 +466,11 @@ export class Simulator {
                 this.physics.cosmology.tempHistory
             );
             this.particles.updateStatistics();
+        }
+
+        // Debug: Log first render
+        if (this.frameCount === 1) {
+            console.log('First render - Visible particles:', visibleCount, '/ Total:', this.particles.count);
         }
 
         // Request next frame

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test - Are Buttons Clickable?</title>
+    <style>
+        body { margin: 0; background: #000; color: #fff; font-family: monospace; }
+
+        /* Canvas layer - MUST NOT BLOCK */
+        #test-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none; /* KEY: Don't block anything */
+            background: #111;
+        }
+
+        /* UI layer - MUST BE CLICKABLE */
+        #test-ui {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Container transparent */
+        }
+
+        /* Buttons - MUST RECEIVE CLICKS */
+        .test-button {
+            position: absolute;
+            background: rgba(50,50,50,0.9);
+            border: 1px solid #666;
+            color: #fff;
+            padding: 10px 20px;
+            cursor: pointer;
+            pointer-events: auto; /* KEY: Button itself clickable */
+        }
+
+        #btn1 { top: 100px; left: 100px; }
+        #btn2 { top: 150px; left: 100px; }
+        #btn3 { top: 200px; left: 100px; }
+
+        #status {
+            position: absolute;
+            top: 300px;
+            left: 100px;
+            color: #0f0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="test-canvas"></canvas>
+
+    <div id="test-ui">
+        <button class="test-button" id="btn1">Test Button 1</button>
+        <button class="test-button" id="btn2">Test Button 2</button>
+        <button class="test-button" id="btn3">Test Button 3</button>
+        <div id="status">Click buttons to test</div>
+    </div>
+
+    <script>
+        // Test button clicks
+        let clickCount = 0;
+
+        document.getElementById('btn1').addEventListener('click', () => {
+            clickCount++;
+            document.getElementById('status').textContent = `Button 1 clicked! Total: ${clickCount}`;
+            console.log('Button 1 works!');
+        });
+
+        document.getElementById('btn2').addEventListener('click', () => {
+            clickCount++;
+            document.getElementById('status').textContent = `Button 2 clicked! Total: ${clickCount}`;
+            console.log('Button 2 works!');
+        });
+
+        document.getElementById('btn3').addEventListener('click', () => {
+            clickCount++;
+            document.getElementById('status').textContent = `Button 3 clicked! Total: ${clickCount}`;
+            console.log('Button 3 works!');
+        });
+
+        // Test canvas rendering
+        const canvas = document.getElementById('test-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Draw particles
+        function drawParticles() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 1000; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            requestAnimationFrame(drawParticles);
+        }
+
+        drawParticles();
+
+        console.log('Test page loaded');
+        console.log('Canvas pointer-events:', getComputedStyle(canvas).pointerEvents);
+        console.log('Button pointer-events:', getComputedStyle(document.getElementById('btn1')).pointerEvents);
+    </script>
+</body>
+</html>

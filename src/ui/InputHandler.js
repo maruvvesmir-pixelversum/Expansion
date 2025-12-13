@@ -175,19 +175,23 @@ export class InputHandler {
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
         window.addEventListener('keyup', (e) => this.handleKeyUp(e));
 
-        // Mouse
-        this.canvas.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
-        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-        this.canvas.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
-        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-        this.canvas.addEventListener('click', (e) => this.handleClick(e));
+        // Mouse - bind to window to capture all events
+        window.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
+        window.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        window.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        window.addEventListener('contextmenu', (e) => {
+            // Only prevent context menu when not on UI
+            if (!this.isUIElement(e.target)) {
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('click', (e) => this.handleClick(e));
 
-        // Touch
-        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+        // Touch - bind to window for touch devices
+        window.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        window.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        window.addEventListener('touchend', (e) => this.handleTouchEnd(e));
     }
 
     /**
@@ -398,11 +402,19 @@ export class InputHandler {
      * Handle mouse wheel
      */
     handleWheel(e) {
+        // Don't intercept wheel events on UI elements (allow scrolling)
+        if (this.isUIElement(e.target)) {
+            return;
+        }
+
         e.preventDefault();
 
         const delta = e.deltaY > 0 ? 0.9 : 1.1;
 
-        if (this.callbacks.onZoom) {
+        // Zoom toward mouse cursor position
+        if (this.callbacks.onZoomAtPoint) {
+            this.callbacks.onZoomAtPoint(delta, e.clientX, e.clientY);
+        } else if (this.callbacks.onZoom) {
             this.callbacks.onZoom(delta);
         }
     }
@@ -411,6 +423,11 @@ export class InputHandler {
      * Handle mouse down
      */
     handleMouseDown(e) {
+        // Don't intercept if clicking on UI elements
+        if (this.isUIElement(e.target)) {
+            return;
+        }
+
         this.isDragging = true;
         this.lastMouseX = e.clientX;
         this.lastMouseY = e.clientY;
@@ -426,9 +443,33 @@ export class InputHandler {
     }
 
     /**
+     * Check if element is a UI element that should receive events
+     */
+    isUIElement(element) {
+        // Check if element or any parent is a UI element
+        while (element) {
+            if (element.tagName === 'BUTTON' ||
+                element.tagName === 'INPUT' ||
+                element.tagName === 'SELECT' ||
+                element.tagName === 'A' ||
+                element.className?.includes('ui-panel') ||
+                element.className?.includes('touch-btn') ||
+                element.className?.includes('time-btn') ||
+                element.id === 'ui-overlay' ||
+                element.id === 'settings-panel' ||
+                element.id === 'help-modal') {
+                return true;
+            }
+            element = element.parentElement;
+        }
+        return false;
+    }
+
+    /**
      * Handle mouse move
      */
     handleMouseMove(e) {
+        // If we're not dragging, check if we should start ignoring UI
         if (!this.isDragging) {
             if (this.callbacks.onMouseMove) {
                 this.callbacks.onMouseMove({
@@ -437,6 +478,12 @@ export class InputHandler {
                     dragging: false
                 });
             }
+            return;
+        }
+
+        // Don't continue drag if mouse moves over UI element
+        if (this.isUIElement(e.target)) {
+            this.isDragging = false;
             return;
         }
 
@@ -453,6 +500,13 @@ export class InputHandler {
                 if (this.callbacks.onCameraMove) {
                     this.callbacks.onCameraMove(dx, dy, 0);
                 }
+            }
+        }
+
+        // Middle button: pan
+        if (e.buttons === 4) {
+            if (this.callbacks.onCameraMove) {
+                this.callbacks.onCameraMove(dx, dy, 0);
             }
         }
 
@@ -496,6 +550,11 @@ export class InputHandler {
      * Handle click
      */
     handleClick(e) {
+        // Don't intercept if clicking on UI elements
+        if (this.isUIElement(e.target)) {
+            return;
+        }
+
         if (this.callbacks.onClick) {
             this.callbacks.onClick({
                 x: e.clientX,

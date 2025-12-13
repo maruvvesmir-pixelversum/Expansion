@@ -23,8 +23,8 @@ export class Renderer {
         });
 
         // Rendering settings
-        this.particleSizeMultiplier = 1.0;
-        this.maxVisibleParticles = 150000;  // Performance limit
+        this.particleSizeMultiplier = 3.0;  // Larger particles for visibility
+        this.maxVisibleParticles = 5000;  // Performance limit for Canvas 2D
         this.renderStride = 1;
 
         // Visual effects
@@ -39,7 +39,7 @@ export class Renderer {
             vignetteIntensity: 0.3,
             cosmicWeb: false,
             cosmicWebDensity: 0.15,
-            useLOD: true  // Enable LOD system
+            useLOD: true  // Enable LOD for performance
         };
 
         // Render statistics
@@ -74,9 +74,31 @@ export class Renderer {
     render(particles, camera, epoch, options = {}) {
         const renderStart = performance.now();
 
+        // Debug: Check particles at render entry
+        if (!this._renderEntryLogged) {
+            console.log('Render() entry - particles received:', {
+                particlesArg: particles,
+                hasParticlesProperty: !!particles.particles,
+                firstX: particles.particles?.x?.[0],
+                firstY: particles.particles?.y?.[0],
+                firstZ: particles.particles?.z?.[0]
+            });
+            this._renderEntryLogged = true;
+        }
+
         const ctx = this.ctxMain;
         const width = this.canvasMain.width;
         const height = this.canvasMain.height;
+
+        // Debug: Check if canvas is properly initialized
+        if (!ctx) {
+            console.error('Renderer: No 2D context available');
+            return 0;
+        }
+        if (width === 0 || height === 0) {
+            console.warn('Renderer: Canvas has zero size', { width, height });
+            return 0;
+        }
 
         // Update LOD system with current FPS
         if (options.currentFPS && this.effects.useLOD) {
@@ -107,6 +129,15 @@ export class Renderer {
         // Sort by depth (back to front)
         this.visibleParticles.sort((a, b) => b.z - a.z);
 
+        // Debug: Log particle count once
+        if (!this._loggedOnce) {
+            console.log('Renderer: Visible particles:', this.visibleParticles.length, 'Total:', particles.count);
+            if (this.visibleParticles.length > 0) {
+                console.log('First particle:', this.visibleParticles[0]);
+            }
+            this._loggedOnce = true;
+        }
+
         // Draw grid if enabled
         if (options.showGrid) {
             this.drawGrid(ctx, camera);
@@ -121,6 +152,7 @@ export class Renderer {
         ctx.globalCompositeOperation = 'lighter';
         this.renderParticles(ctx, jitter);
         ctx.globalCompositeOperation = 'source-over';
+
 
         // Draw velocity vectors if enabled
         if (options.showVelocities) {
@@ -152,10 +184,17 @@ export class Renderer {
         const n = particles.count;
         const stride = this.calculateStride(n);
 
+        let checkedCount = 0;
+        let culledCount = 0;
+
         for (let i = 0; i < n; i += stride) {
+            checkedCount++;
             const projected = camera.project(p.x[i], p.y[i], p.z[i]);
 
-            if (!projected.visible) continue;
+            if (!projected.visible) {
+                culledCount++;
+                continue;
+            }
 
             // Store previous screen position
             const prevX = p.prevScreenX[i];
@@ -178,6 +217,38 @@ export class Renderer {
                 alpha: Math.min(1, 0.4 + p.brightness[i] * 0.6),
                 brightness: p.brightness[i]
             });
+        }
+
+        // Debug logging
+        if (!this._cullingLogged) {
+            console.log('Culling stats:', {
+                totalParticles: n,
+                checkedParticles: checkedCount,
+                culled: culledCount,
+                visible: this.visibleParticles.length,
+                stride: stride
+            });
+            if (this.visibleParticles.length > 0) {
+                const sample = this.visibleParticles[0];
+                console.log('Sample visible particle:', sample);
+                console.log('Particle render properties:', {
+                    screenPos: { x: sample.x, y: sample.y },
+                    size: sample.size,
+                    color: { r: sample.r, g: sample.g, b: sample.b },
+                    alpha: sample.alpha
+                });
+            } else if (checkedCount > 0) {
+                // Log first particle projection details
+                const testProj = camera.project(p.x[0], p.y[0], p.z[0]);
+                console.log('First particle projection test:', {
+                    world: { x: p.x[0], y: p.y[0], z: p.z[0] },
+                    screen: { x: testProj.x, y: testProj.y, z: testProj.z },
+                    visible: testProj.visible,
+                    viewport: { width: camera.width, height: camera.height },
+                    camera: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom }
+                });
+            }
+            this._cullingLogged = true;
         }
 
         this.visibleCount = this.visibleParticles.length;

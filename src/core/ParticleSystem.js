@@ -83,6 +83,15 @@ export class ParticleSystem {
             visible: new Uint8Array(n)
         };
 
+        console.log('Particle arrays created:', {
+            xArrayLength: this.particles.x.length,
+            yArrayLength: this.particles.y.length,
+            zArrayLength: this.particles.z.length,
+            firstX: this.particles.x[0],
+            firstY: this.particles.y[0],
+            firstZ: this.particles.z[0]
+        });
+
         await this.generateInitialConditions();
     }
 
@@ -129,6 +138,16 @@ export class ParticleSystem {
             p.y[i] = pos.y;
             p.z[i] = pos.z;
 
+            // Debug first particle
+            if (i === 0) {
+                console.log('First particle generation:', {
+                    pos: { x: pos.x, y: pos.y, z: pos.z },
+                    stored: { x: p.x[i], y: p.y[i], z: p.z[i] },
+                    distribution: distribution,
+                    radius: radius
+                });
+            }
+
             // Initial velocities: Hubble flow + thermal
             p.vx[i] = pos.x * hubbleVelocity + (Math.random() - 0.5) * thermalVelocity;
             p.vy[i] = pos.y * hubbleVelocity + (Math.random() - 0.5) * thermalVelocity;
@@ -166,6 +185,26 @@ export class ParticleSystem {
 
         // Calculate initial statistics
         this.updateStatistics();
+
+        // Debug: Check final state
+        console.log('Particle generation complete:', {
+            count: n,
+            firstParticle: {
+                x: p.x[0],
+                y: p.y[0],
+                z: p.z[0],
+                vx: p.vx[0],
+                vy: p.vy[0],
+                vz: p.vz[0],
+                mass: p.mass[0],
+                temp: p.temperature[0]
+            },
+            lastParticle: {
+                x: p.x[n-1],
+                y: p.y[n-1],
+                z: p.z[n-1]
+            }
+        });
 
         // Allow UI to update during initialization
         await new Promise(resolve => setTimeout(resolve, 0));

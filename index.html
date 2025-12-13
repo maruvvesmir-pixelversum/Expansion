@@ -30,6 +30,7 @@
             width: 100%;
             height: 100%;
             z-index: 1;
+            pointer-events: none; /* Don't block UI */
         }
 
         #canvas-main, #canvas-effects, #canvas-ui {
@@ -40,7 +41,7 @@
             height: 100%;
         }
 
-        #canvas-main { z-index: 1; }
+        #canvas-main { z-index: 1; pointer-events: none; }
         #canvas-effects { z-index: 2; pointer-events: none; }
         #canvas-ui { z-index: 3; pointer-events: none; }
 
@@ -79,6 +80,7 @@
             align-items: center;
             padding: 6px 12px;
             background: rgba(0, 0, 0, 0.95);
+            pointer-events: auto; /* Make clickable */
         }
 
         #header .title {
@@ -123,6 +125,7 @@
             overflow-y: auto;
             scrollbar-width: thin;
             scrollbar-color: #444 #000;
+            pointer-events: auto; /* Make clickable */
         }
 
         #left-panel::-webkit-scrollbar {
@@ -148,6 +151,7 @@
             overflow-y: auto;
             scrollbar-width: thin;
             scrollbar-color: #444 #000;
+            pointer-events: auto; /* Make clickable */
         }
 
         #right-panel::-webkit-scrollbar {
@@ -171,6 +175,7 @@
             right: 300px;
             background: rgba(0, 0, 0, 0.95);
             border-top: 1px solid #444;
+            pointer-events: auto; /* Make clickable */
         }
 
         /* Panel Sections */
@@ -636,6 +641,7 @@
             overflow-y: auto;
             display: none;
             z-index: 200;
+            pointer-events: auto; /* Make clickable */
         }
 
         #settings-panel.visible {
@@ -835,6 +841,7 @@
             display: none;
             overflow-y: auto;
             padding: 40px;
+            pointer-events: auto; /* Make clickable */
         }
 
         #help-modal.visible {

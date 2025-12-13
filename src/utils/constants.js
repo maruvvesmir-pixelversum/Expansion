@@ -69,9 +69,9 @@ export const DEFAULT_COSMOLOGY = {
 
 // Simulation Configuration Defaults
 export const SIMULATION = {
-    particleCount: 500000,
+    particleCount: 10000,  // Reduced for Canvas 2D performance
     maxParticleCount: 4000000,
-    minParticleCount: 50000,
+    minParticleCount: 10000,
     softeningLength: 1.0,           // kpc
     barnesHutTheta: 0.5,            // Opening angle for tree gravity
     timeStepMultiplier: 1e10,       // Default time speed

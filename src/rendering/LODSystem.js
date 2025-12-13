@@ -124,13 +124,34 @@ export class LODSystem {
         const visible = [];
         const stride = this.calculateStride(n, maxVisible);
 
+        let checkedCount = 0;
+        let culledByProjection = 0;
+        let culledByLOD = 0;
+
         for (let i = 0; i < n; i += stride) {
+            checkedCount++;
             const projected = camera.project(p.x[i], p.y[i], p.z[i]);
 
-            if (!projected.visible) continue;
+            if (!projected.visible) {
+                culledByProjection++;
+                // Debug first particle
+                if (i === 0) {
+                    console.log('LOD: First particle culled by projection:', {
+                        world: { x: p.x[i], y: p.y[i], z: p.z[i] },
+                        projected: { x: projected.x, y: projected.y, z: projected.z },
+                        visible: projected.visible,
+                        viewport: { width: camera.width, height: camera.height },
+                        camera: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom }
+                    });
+                }
+                continue;
+            }
 
             // Check LOD culling
-            if (!this.shouldRender(i, projected.z)) continue;
+            if (!this.shouldRender(i, projected.z)) {
+                culledByLOD++;
+                continue;
+            }
 
             const lodParams = this.getRenderParams(projected.z);
 
@@ -166,6 +187,20 @@ export class LODSystem {
         }
 
         this.stats.totalRendered = visible.length;
+
+        // Debug logging once
+        if (!this._debugLogged) {
+            console.log('LOD System Stats:', {
+                totalParticles: n,
+                checkedParticles: checkedCount,
+                culledByProjection: culledByProjection,
+                culledByLOD: culledByLOD,
+                visible: visible.length,
+                stride: stride,
+                qualityLevel: this.qualityLevel
+            });
+            this._debugLogged = true;
+        }
 
         return visible;
     }
