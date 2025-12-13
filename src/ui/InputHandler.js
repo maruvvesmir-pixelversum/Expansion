@@ -2,7 +2,7 @@
  * Input Handler
  * Universe Evolution Simulator v2.47.3
  *
- * Handles keyboard, mouse, and touch input
+ * Handles keyboard, mouse, and touch input with momentum and gestures
  */
 
 export class InputHandler {
@@ -23,12 +23,148 @@ export class InputHandler {
         this.lastTouchX = 0;
         this.lastTouchY = 0;
         this.lastTapTime = 0;
+        this.touchStartTime = 0;
+        this.initialPinchDistance = 0;
+
+        // Momentum/inertia state
+        this.momentum = { x: 0, y: 0 };
+        this.velocityHistory = [];
+        this.maxVelocityHistory = 5;
+        this.momentumDamping = 0.92;
+        this.momentumThreshold = 0.5;
+        this.lastMoveTime = 0;
+
+        // Zoom momentum
+        this.zoomMomentum = 0;
+        this.zoomDamping = 0.85;
+        this.zoomThreshold = 0.001;
+
+        // Rotation momentum
+        this.rotationMomentum = { x: 0, y: 0 };
+        this.rotationDamping = 0.9;
+
+        // Long press detection
+        this.longPressTimer = null;
+        this.longPressDelay = 500;
+        this.longPressTriggered = false;
+
+        // Gesture state
+        this.gestureType = null; // 'pan', 'zoom', 'rotate'
+        this.gestureStarted = false;
 
         // Key state
         this.keysDown = new Set();
 
+        // Animation frame for momentum
+        this.animationFrame = null;
+
         // Bind event handlers
         this.bindEvents();
+
+        // Start momentum update loop
+        this.startMomentumLoop();
+    }
+
+    /**
+     * Start the momentum update loop
+     */
+    startMomentumLoop() {
+        const updateMomentum = () => {
+            this.applyMomentum();
+            this.animationFrame = requestAnimationFrame(updateMomentum);
+        };
+        this.animationFrame = requestAnimationFrame(updateMomentum);
+    }
+
+    /**
+     * Apply momentum for smooth deceleration
+     */
+    applyMomentum() {
+        // Skip if actively dragging
+        if (this.isDragging) return;
+
+        // Apply pan momentum
+        if (Math.abs(this.momentum.x) > this.momentumThreshold ||
+            Math.abs(this.momentum.y) > this.momentumThreshold) {
+
+            if (this.callbacks.onCameraMove) {
+                this.callbacks.onCameraMove(this.momentum.x, this.momentum.y, 0);
+            }
+
+            this.momentum.x *= this.momentumDamping;
+            this.momentum.y *= this.momentumDamping;
+
+            if (Math.abs(this.momentum.x) < this.momentumThreshold) this.momentum.x = 0;
+            if (Math.abs(this.momentum.y) < this.momentumThreshold) this.momentum.y = 0;
+        }
+
+        // Apply zoom momentum
+        if (Math.abs(this.zoomMomentum) > this.zoomThreshold) {
+            if (this.callbacks.onZoom) {
+                this.callbacks.onZoom(1 + this.zoomMomentum);
+            }
+            this.zoomMomentum *= this.zoomDamping;
+            if (Math.abs(this.zoomMomentum) < this.zoomThreshold) this.zoomMomentum = 0;
+        }
+
+        // Apply rotation momentum
+        if (Math.abs(this.rotationMomentum.x) > 0.001 ||
+            Math.abs(this.rotationMomentum.y) > 0.001) {
+
+            if (this.callbacks.onCameraRotate) {
+                this.callbacks.onCameraRotate(this.rotationMomentum.x, this.rotationMomentum.y);
+            }
+
+            this.rotationMomentum.x *= this.rotationDamping;
+            this.rotationMomentum.y *= this.rotationDamping;
+
+            if (Math.abs(this.rotationMomentum.x) < 0.001) this.rotationMomentum.x = 0;
+            if (Math.abs(this.rotationMomentum.y) < 0.001) this.rotationMomentum.y = 0;
+        }
+    }
+
+    /**
+     * Calculate velocity from recent movements
+     */
+    calculateVelocity() {
+        if (this.velocityHistory.length < 2) return { x: 0, y: 0 };
+
+        let totalX = 0, totalY = 0, count = 0;
+        const now = performance.now();
+
+        for (let i = 1; i < this.velocityHistory.length; i++) {
+            const prev = this.velocityHistory[i - 1];
+            const curr = this.velocityHistory[i];
+            const dt = curr.time - prev.time;
+
+            if (dt > 0 && now - curr.time < 100) {
+                totalX += (curr.x - prev.x) / dt * 16;
+                totalY += (curr.y - prev.y) / dt * 16;
+                count++;
+            }
+        }
+
+        return count > 0 ? { x: totalX / count, y: totalY / count } : { x: 0, y: 0 };
+    }
+
+    /**
+     * Add position to velocity history
+     */
+    addToVelocityHistory(x, y) {
+        this.velocityHistory.push({ x, y, time: performance.now() });
+        if (this.velocityHistory.length > this.maxVelocityHistory) {
+            this.velocityHistory.shift();
+        }
+    }
+
+    /**
+     * Stop all momentum
+     */
+    stopMomentum() {
+        this.momentum = { x: 0, y: 0 };
+        this.zoomMomentum = 0;
+        this.rotationMomentum = { x: 0, y: 0 };
+        this.velocityHistory = [];
     }
 
     /**
@@ -375,11 +511,29 @@ export class InputHandler {
     handleTouchStart(e) {
         e.preventDefault();
 
+        // Stop any existing momentum when starting a new touch
+        this.stopMomentum();
+
+        // Clear long press timer
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = null;
+        }
+        this.longPressTriggered = false;
+
         for (const touch of e.changedTouches) {
-            this.touches[touch.identifier] = { x: touch.clientX, y: touch.clientY };
+            this.touches[touch.identifier] = {
+                x: touch.clientX,
+                y: touch.clientY,
+                startX: touch.clientX,
+                startY: touch.clientY
+            };
         }
 
         const touchCount = Object.keys(this.touches).length;
+        this.touchStartTime = performance.now();
+        this.gestureType = null;
+        this.gestureStarted = false;
 
         if (touchCount === 2) {
             const touchPoints = Object.values(this.touches);
@@ -387,6 +541,7 @@ export class InputHandler {
                 touchPoints[1].x - touchPoints[0].x,
                 touchPoints[1].y - touchPoints[0].y
             );
+            this.initialPinchDistance = this.lastTouchDistance;
             this.lastTouchCenter = {
                 x: (touchPoints[0].x + touchPoints[1].x) / 2,
                 y: (touchPoints[0].y + touchPoints[1].y) / 2
@@ -397,6 +552,27 @@ export class InputHandler {
             const touch = Object.values(this.touches)[0];
             this.lastTouchX = touch.x;
             this.lastTouchY = touch.y;
+            this.addToVelocityHistory(touch.x, touch.y);
+
+            // Start long press timer
+            this.longPressTimer = setTimeout(() => {
+                if (!this.gestureStarted) {
+                    this.longPressTriggered = true;
+                    if (this.callbacks.onLongPress) {
+                        this.callbacks.onLongPress({
+                            x: touch.x,
+                            y: touch.y
+                        });
+                    }
+                }
+            }, this.longPressDelay);
+        }
+
+        if (touchCount === 3) {
+            // Three finger gesture - could be used for special actions
+            if (this.callbacks.onThreeFingerGesture) {
+                this.callbacks.onThreeFingerGesture('start');
+            }
         }
 
         this.isDragging = true;
@@ -415,28 +591,45 @@ export class InputHandler {
     handleTouchMove(e) {
         e.preventDefault();
 
+        // Clear long press timer on move
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = null;
+        }
+
         for (const touch of e.changedTouches) {
             if (this.touches[touch.identifier]) {
-                this.touches[touch.identifier] = { x: touch.clientX, y: touch.clientY };
+                this.touches[touch.identifier].x = touch.clientX;
+                this.touches[touch.identifier].y = touch.clientY;
             }
         }
 
         const touchCount = Object.keys(this.touches).length;
 
-        if (touchCount === 1) {
-            // Single touch: pan
+        if (touchCount === 1 && !this.longPressTriggered) {
+            // Single touch: pan with momentum tracking
             const touch = Object.values(this.touches)[0];
             const dx = touch.x - this.lastTouchX;
             const dy = touch.y - this.lastTouchY;
 
-            if (this.callbacks.onCameraMove) {
+            // Mark gesture as started if moved enough
+            if (!this.gestureStarted && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+                this.gestureStarted = true;
+                this.gestureType = 'pan';
+            }
+
+            if (this.gestureStarted && this.callbacks.onCameraMove) {
                 this.callbacks.onCameraMove(dx, dy, 0);
             }
 
+            // Track velocity for momentum
+            this.addToVelocityHistory(touch.x, touch.y);
+
             this.lastTouchX = touch.x;
             this.lastTouchY = touch.y;
+
         } else if (touchCount === 2) {
-            // Two touch: zoom and rotate
+            // Two touch: pinch zoom and pan
             const touchPoints = Object.values(this.touches);
             const currentDistance = Math.hypot(
                 touchPoints[1].x - touchPoints[0].x,
@@ -447,29 +640,67 @@ export class InputHandler {
                 y: (touchPoints[0].y + touchPoints[1].y) / 2
             };
 
-            // Zoom
-            if (this.lastTouchDistance > 0) {
-                const scale = currentDistance / this.lastTouchDistance;
-                if (this.callbacks.onZoom) {
-                    this.callbacks.onZoom(scale);
+            // Determine gesture type based on initial movement
+            if (!this.gestureType) {
+                const distanceChange = Math.abs(currentDistance - this.initialPinchDistance);
+                const centerMove = Math.hypot(
+                    currentCenter.x - this.lastTouchCenter.x,
+                    currentCenter.y - this.lastTouchCenter.y
+                );
+
+                if (distanceChange > 15) {
+                    this.gestureType = 'zoom';
+                } else if (centerMove > 15) {
+                    this.gestureType = 'rotate';
                 }
             }
 
-            // Rotate
+            // Pinch to zoom (always active with two fingers)
+            if (this.lastTouchDistance > 0) {
+                const scale = currentDistance / this.lastTouchDistance;
+
+                // Zoom toward the pinch center
+                if (this.callbacks.onZoomAtPoint) {
+                    this.callbacks.onZoomAtPoint(scale, currentCenter.x, currentCenter.y);
+                } else if (this.callbacks.onZoom) {
+                    this.callbacks.onZoom(scale);
+                }
+
+                // Track zoom momentum
+                this.zoomMomentum = (scale - 1) * 0.5;
+            }
+
+            // Two finger pan/rotate
             const dx = currentCenter.x - this.lastTouchCenter.x;
             const dy = currentCenter.y - this.lastTouchCenter.y;
-            if (this.callbacks.onCameraRotate) {
-                this.callbacks.onCameraRotate(dx * 0.005, dy * 0.005);
+
+            if (this.gestureType === 'rotate' || Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+                if (this.callbacks.onCameraRotate) {
+                    this.callbacks.onCameraRotate(dx * 0.005, dy * 0.005);
+                }
+                this.rotationMomentum = { x: dx * 0.003, y: dy * 0.003 };
             }
 
             this.lastTouchDistance = currentDistance;
             this.lastTouchCenter = currentCenter;
+            this.gestureStarted = true;
+
+        } else if (touchCount === 3) {
+            // Three finger: could be time scrub or special control
+            if (this.callbacks.onThreeFingerGesture) {
+                const touchPoints = Object.values(this.touches);
+                const avgX = touchPoints.reduce((sum, t) => sum + t.x, 0) / 3;
+                const avgY = touchPoints.reduce((sum, t) => sum + t.y, 0) / 3;
+
+                this.callbacks.onThreeFingerGesture('move', { x: avgX, y: avgY });
+            }
         }
 
         if (this.callbacks.onTouchMove) {
             this.callbacks.onTouchMove({
                 touches: Object.values(this.touches),
-                count: touchCount
+                count: touchCount,
+                gestureType: this.gestureType
             });
         }
     }
@@ -478,26 +709,68 @@ export class InputHandler {
      * Handle touch end
      */
     handleTouchEnd(e) {
+        // Clear long press timer
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = null;
+        }
+
+        const touchDuration = performance.now() - this.touchStartTime;
+        const wasQuickTap = touchDuration < 200 && !this.gestureStarted;
+
         for (const touch of e.changedTouches) {
             delete this.touches[touch.identifier];
         }
 
-        if (Object.keys(this.touches).length === 0) {
-            this.isDragging = false;
+        const remainingTouches = Object.keys(this.touches).length;
 
-            // Detect double tap
+        if (remainingTouches === 0) {
+            // Calculate and apply momentum for single touch pan
+            if (this.gestureType === 'pan' || (!this.gestureType && this.gestureStarted)) {
+                const velocity = this.calculateVelocity();
+                this.momentum = {
+                    x: velocity.x * 0.8,
+                    y: velocity.y * 0.8
+                };
+            }
+
+            this.isDragging = false;
+            this.gestureType = null;
+            this.gestureStarted = false;
+
+            // Detect double tap (quick taps only)
             const now = Date.now();
-            if (now - this.lastTapTime < 300) {
+            if (wasQuickTap && now - this.lastTapTime < 300) {
                 if (this.callbacks.onDoubleTap) {
                     this.callbacks.onDoubleTap();
                 }
+                this.lastTapTime = 0; // Reset to prevent triple-tap
+            } else if (wasQuickTap) {
+                this.lastTapTime = now;
+
+                // Single tap callback
+                if (this.callbacks.onTap) {
+                    const touch = e.changedTouches[0];
+                    this.callbacks.onTap({
+                        x: touch.clientX,
+                        y: touch.clientY
+                    });
+                }
             }
-            this.lastTapTime = now;
+        } else if (remainingTouches === 1) {
+            // Transitioning from multi-touch to single touch
+            const touch = Object.values(this.touches)[0];
+            this.lastTouchX = touch.x;
+            this.lastTouchY = touch.y;
+            this.velocityHistory = [];
+            this.addToVelocityHistory(touch.x, touch.y);
+            this.gestureType = 'pan';
         }
 
         if (this.callbacks.onTouchEnd) {
             this.callbacks.onTouchEnd({
-                remainingTouches: Object.values(this.touches)
+                remainingTouches: Object.values(this.touches),
+                wasQuickTap
             });
         }
     }
@@ -515,7 +788,30 @@ export class InputHandler {
     destroy() {
         window.removeEventListener('keydown', this.handleKeyDown);
         window.removeEventListener('keyup', this.handleKeyUp);
+
+        // Cancel momentum animation frame
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+        }
+
+        // Clear long press timer
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+        }
+
         // Note: canvas listeners would be removed when canvas is removed from DOM
+    }
+
+    /**
+     * Get current gesture state (for UI feedback)
+     */
+    getGestureState() {
+        return {
+            isDragging: this.isDragging,
+            gestureType: this.gestureType,
+            touchCount: Object.keys(this.touches).length,
+            hasMomentum: Math.abs(this.momentum.x) > 0.1 || Math.abs(this.momentum.y) > 0.1
+        };
     }
 }
 

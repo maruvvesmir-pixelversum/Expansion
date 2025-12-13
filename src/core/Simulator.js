@@ -144,6 +144,7 @@ export class Simulator {
         this.input = new InputHandler(this.canvasMain, {
             // Camera controls
             onCameraMove: (dx, dy, dz) => {
+                this.camera.stopPan(); // Stop any smooth pan
                 this.camera.pan(dx, dy);
             },
             onCameraRotate: (dx, dy) => {
@@ -151,6 +152,10 @@ export class Simulator {
             },
             onZoom: (factor) => {
                 this.camera.zoomBy(factor);
+            },
+            onZoomAtPoint: (factor, x, y) => {
+                this.camera.zoomAtPoint(factor, x, y);
+                this.showZoomIndicator();
             },
 
             // Time controls
@@ -183,14 +188,45 @@ export class Simulator {
                 if (this.tracerMode) this.toggleTracerMode();
             },
 
-            // Double tap (touch)
+            // Touch gestures
             onDoubleTap: () => this.resetView(),
+            onLongPress: (e) => {
+                // Long press shows settings on touch devices
+                this.ui.toggleSettings();
+            },
+            onTap: (e) => {
+                if (this.tracerMode) {
+                    this.selectParticleForTracer(e.x, e.y);
+                }
+            },
+            onThreeFingerGesture: (type, data) => {
+                // Three finger swipe for time control
+                if (type === 'start') {
+                    this.threeFingerStartX = data?.x ?? 0;
+                } else if (type === 'move' && data) {
+                    const dx = data.x - (this.threeFingerStartX ?? data.x);
+                    if (Math.abs(dx) > 50) {
+                        this.changeSpeed(dx > 0 ? 2 : 0.5);
+                        this.threeFingerStartX = data.x;
+                    }
+                }
+            },
 
             // Click for tracer selection
             onClick: (e) => {
                 if (this.tracerMode) {
                     this.selectParticleForTracer(e.x, e.y);
                 }
+            },
+
+            // Touch gesture feedback
+            onTouchMove: (e) => {
+                if (e.gestureType && e.count >= 2) {
+                    this.showGestureIndicator(e.gestureType);
+                }
+            },
+            onTouchEnd: (e) => {
+                this.hideGestureIndicator();
             }
         });
     }
@@ -212,12 +248,34 @@ export class Simulator {
         document.getElementById('btn-reverse')?.addEventListener('click', () => this.toggleReverse());
         document.getElementById('btn-reset')?.addEventListener('click', () => this.resetSimulation());
 
-        // Touch buttons
+        // Touch buttons - Right side (view controls)
         document.getElementById('touch-settings')?.addEventListener('click', () => this.ui.toggleSettings());
-        document.getElementById('touch-zoomin')?.addEventListener('click', () => this.camera.zoomBy(1.5));
-        document.getElementById('touch-zoomout')?.addEventListener('click', () => this.camera.zoomBy(1/1.5));
-        document.getElementById('touch-play')?.addEventListener('click', () => this.togglePlay());
+        document.getElementById('touch-help')?.addEventListener('click', () => this.ui.toggleHelp());
+        document.getElementById('touch-zoomin')?.addEventListener('click', () => {
+            this.camera.zoomBy(1.5);
+            this.showZoomIndicator();
+        });
+        document.getElementById('touch-zoomout')?.addEventListener('click', () => {
+            this.camera.zoomBy(1/1.5);
+            this.showZoomIndicator();
+        });
         document.getElementById('touch-reset')?.addEventListener('click', () => this.resetView());
+        document.getElementById('touch-screenshot')?.addEventListener('click', () => this.takeScreenshot());
+
+        // Touch buttons - Left side (time controls)
+        document.getElementById('touch-play')?.addEventListener('click', () => this.togglePlay());
+        document.getElementById('touch-slower')?.addEventListener('click', () => {
+            this.changeSpeed(0.5);
+            this.ui.showNotification('Speed: ' + this.ui.formatSpeed(this.timeSpeed));
+        });
+        document.getElementById('touch-faster')?.addEventListener('click', () => {
+            this.changeSpeed(2);
+            this.ui.showNotification('Speed: ' + this.ui.formatSpeed(this.timeSpeed));
+        });
+        document.getElementById('touch-reverse')?.addEventListener('click', () => this.toggleReverse());
+
+        // Hide touch hint after first interaction
+        this.setupTouchHint();
 
         // Timeline click
         document.getElementById('timeline-bar')?.addEventListener('click', (e) => this.handleTimelineClick(e));
@@ -689,6 +747,117 @@ export class Simulator {
             document.documentElement.requestFullscreen();
         } else {
             document.exitFullscreen();
+        }
+    }
+
+    /**
+     * Show zoom indicator
+     */
+    showZoomIndicator() {
+        const indicator = document.getElementById('zoom-indicator');
+        const fill = document.getElementById('zoom-fill');
+        const value = document.getElementById('zoom-value');
+
+        if (!indicator || !fill || !value) return;
+
+        // Calculate zoom percentage (0.1 to 100 range mapped to 0-100%)
+        const minZoom = 0.1;
+        const maxZoom = 100;
+        const logMin = Math.log10(minZoom);
+        const logMax = Math.log10(maxZoom);
+        const logCurrent = Math.log10(this.camera.zoom);
+        const percentage = ((logCurrent - logMin) / (logMax - logMin)) * 100;
+
+        fill.style.width = Math.max(0, Math.min(100, percentage)) + '%';
+        value.textContent = this.camera.zoom.toFixed(1) + 'x';
+
+        indicator.classList.add('visible');
+
+        // Clear existing timer
+        if (this.zoomIndicatorTimer) {
+            clearTimeout(this.zoomIndicatorTimer);
+        }
+
+        // Hide after delay
+        this.zoomIndicatorTimer = setTimeout(() => {
+            indicator.classList.remove('visible');
+        }, 1500);
+    }
+
+    /**
+     * Show gesture indicator
+     */
+    showGestureIndicator(type) {
+        const indicator = document.getElementById('gesture-indicator');
+        const icon = document.getElementById('gesture-icon');
+        const text = document.getElementById('gesture-text');
+
+        if (!indicator || !icon || !text) return;
+
+        const gestures = {
+            pan: { icon: '👆', text: 'Panning' },
+            zoom: { icon: '🤏', text: 'Zooming' },
+            rotate: { icon: '🔄', text: 'Rotating' },
+            pinch: { icon: '🤏', text: 'Pinch Zoom' }
+        };
+
+        const gesture = gestures[type];
+        if (!gesture) return;
+
+        icon.textContent = gesture.icon;
+        text.textContent = gesture.text;
+        indicator.classList.add('visible');
+
+        // Clear existing timer
+        if (this.gestureIndicatorTimer) {
+            clearTimeout(this.gestureIndicatorTimer);
+        }
+
+        // Hide after delay
+        this.gestureIndicatorTimer = setTimeout(() => {
+            indicator.classList.remove('visible');
+        }, 800);
+    }
+
+    /**
+     * Hide gesture indicator
+     */
+    hideGestureIndicator() {
+        const indicator = document.getElementById('gesture-indicator');
+        if (indicator) {
+            indicator.classList.remove('visible');
+        }
+    }
+
+    /**
+     * Setup touch hint (shows on first load, hides after interaction)
+     */
+    setupTouchHint() {
+        const hint = document.getElementById('touch-hint');
+        if (!hint) return;
+
+        // Check if touch device
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            // Check if user has seen hint before
+            const hintSeen = localStorage.getItem('touchHintSeen');
+            if (!hintSeen) {
+                // Show hint after a short delay
+                setTimeout(() => {
+                    hint.classList.add('visible');
+
+                    // Hide after 5 seconds
+                    setTimeout(() => {
+                        hint.classList.remove('visible');
+                        localStorage.setItem('touchHintSeen', 'true');
+                    }, 5000);
+                }, 2000);
+            }
+
+            // Hide on any touch
+            document.addEventListener('touchstart', () => {
+                hint.classList.remove('visible');
+                localStorage.setItem('touchHintSeen', 'true');
+            }, { once: true });
         }
     }
 }

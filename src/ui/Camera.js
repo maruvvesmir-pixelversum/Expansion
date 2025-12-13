@@ -33,6 +33,13 @@ export class Camera {
         this.followTarget = false;
         this.followSpeed = 0.05;
 
+        // Smooth panning
+        this.isPanning = false;
+        this.panTarget = { x: 0, y: 0 };
+        this.panStartPos = { x: 0, y: 0 };
+        this.panStartTime = 0;
+        this.panDuration = 500;
+
         // Cached rotation matrices
         this.rotationMatrixX = new Mat3();
         this.rotationMatrixY = new Mat3();
@@ -91,13 +98,39 @@ export class Camera {
         // Smooth zoom
         if (Math.abs(this.zoom - this.targetZoom) > 0.001) {
             this.zoom += (this.targetZoom - this.zoom) * this.zoomSpeed;
+        } else {
+            // Reset zoom speed to default after zoom completes
+            this.zoomSpeed = 0.1;
+        }
+
+        // Smooth panning animation
+        if (this.isPanning) {
+            const elapsed = performance.now() - this.panStartTime;
+            const progress = Math.min(1, elapsed / this.panDuration);
+
+            // Ease out cubic for smooth deceleration
+            const eased = 1 - Math.pow(1 - progress, 3);
+
+            this.x = this.panStartPos.x + (this.panTarget.x - this.panStartPos.x) * eased;
+            this.y = this.panStartPos.y + (this.panTarget.y - this.panStartPos.y) * eased;
+
+            if (progress >= 1) {
+                this.isPanning = false;
+            }
         }
 
         // Follow target if enabled
-        if (this.followTarget) {
+        if (this.followTarget && !this.isPanning) {
             this.x += (this.target.x - this.x) * this.followSpeed;
             this.y += (this.target.y - this.y) * this.followSpeed;
         }
+    }
+
+    /**
+     * Stop any ongoing smooth pan
+     */
+    stopPan() {
+        this.isPanning = false;
     }
 
     /**
@@ -206,6 +239,67 @@ export class Camera {
      */
     zoomBy(factor) {
         this.setZoom(this.zoom * factor);
+    }
+
+    /**
+     * Zoom by factor toward a specific screen point
+     * This creates a more intuitive pinch-to-zoom experience
+     */
+    zoomAtPoint(factor, screenX, screenY) {
+        const oldZoom = this.zoom;
+        const newZoom = clamp(oldZoom * factor, VISUAL.minZoom, VISUAL.maxZoom);
+
+        if (newZoom === oldZoom) return;
+
+        // Calculate the world position under the zoom point before zooming
+        const offsetX = screenX - this.centerX;
+        const offsetY = screenY - this.centerY;
+
+        // The point relative to the camera offset
+        const pointX = offsetX - this.x;
+        const pointY = offsetY - this.y;
+
+        // Calculate how much to adjust the camera position
+        // to keep the zoom point stationary
+        const zoomRatio = newZoom / oldZoom;
+        const dx = pointX * (1 - zoomRatio);
+        const dy = pointY * (1 - zoomRatio);
+
+        // Apply the zoom and offset adjustment
+        this.targetZoom = newZoom;
+        this.x += dx;
+        this.y += dy;
+
+        // Make zoom feel more responsive
+        this.zoomSpeed = 0.15;
+    }
+
+    /**
+     * Zoom to fit a specific region
+     */
+    zoomToRegion(x, y, width, height) {
+        // Calculate center of region
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+
+        // Calculate zoom to fit region
+        const zoomX = this.width / width;
+        const zoomY = this.height / height;
+        const newZoom = Math.min(zoomX, zoomY) * 0.9; // 90% to leave margin
+
+        this.setZoom(newZoom);
+        this.setPosition(centerX, centerY, this.z);
+    }
+
+    /**
+     * Smooth pan with easing
+     */
+    smoothPan(targetX, targetY, duration = 500) {
+        this.panTarget = { x: -targetX, y: -targetY };
+        this.panStartPos = { x: this.x, y: this.y };
+        this.panStartTime = performance.now();
+        this.panDuration = duration;
+        this.isPanning = true;
     }
 
     /**

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Universe Evolution Simulator v2.47.3</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23111'/><circle cx='50' cy='50' r='30' fill='none' stroke='%23666' stroke-width='2'/><circle cx='35' cy='40' r='4' fill='%23fff'/><circle cx='60' cy='55' r='3' fill='%2388f'/><circle cx='70' cy='35' r='2' fill='%23f88'/></svg>">
     <style>
         * {
             margin: 0;
@@ -453,7 +454,7 @@
         /* Touch controls */
         #touch-controls {
             position: absolute;
-            bottom: 100px;
+            bottom: 80px;
             right: 10px;
             display: flex;
             flex-direction: column;
@@ -462,29 +463,163 @@
         }
 
         .touch-btn {
-            width: 54px;
-            height: 54px;
-            background: rgba(30, 30, 30, 0.9);
+            width: 50px;
+            height: 50px;
+            background: rgba(20, 20, 20, 0.92);
             border: 1px solid #444;
-            border-radius: 10px;
+            border-radius: 12px;
             color: #aaa;
-            font-size: 22px;
+            font-size: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             user-select: none;
             transition: all 0.15s;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .touch-btn:active {
+            background: rgba(80, 80, 80, 0.95);
+            transform: scale(0.92);
+            border-color: #666;
+        }
+
+        .touch-btn.active {
             background: rgba(60, 60, 60, 0.95);
-            transform: scale(0.95);
+            border-color: #888;
+            color: #fff;
         }
 
         .touch-btn-row {
             display: flex;
             gap: 8px;
+        }
+
+        .touch-btn-small {
+            width: 40px;
+            height: 40px;
+            font-size: 16px;
+        }
+
+        /* Left touch controls for time */
+        #touch-controls-left {
+            position: absolute;
+            bottom: 80px;
+            left: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: auto;
+        }
+
+        /* Gesture indicator */
+        #gesture-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #555;
+            border-radius: 16px;
+            padding: 20px 30px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #gesture-indicator.visible {
+            display: flex;
+        }
+
+        #gesture-indicator .gesture-icon {
+            font-size: 32px;
+            opacity: 0.8;
+        }
+
+        #gesture-indicator .gesture-text {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Zoom indicator */
+        #zoom-indicator {
+            position: fixed;
+            bottom: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #444;
+            border-radius: 20px;
+            padding: 8px 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #zoom-indicator.visible {
+            display: flex;
+        }
+
+        #zoom-indicator .zoom-bar {
+            width: 100px;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #zoom-indicator .zoom-fill {
+            height: 100%;
+            background: linear-gradient(to right, #555, #888);
+            transition: width 0.1s;
+        }
+
+        #zoom-indicator .zoom-value {
+            font-size: 11px;
+            color: #aaa;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        /* Touch hint on first load */
+        #touch-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 11px;
+            color: #888;
+            display: none;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        #touch-hint.visible {
+            display: block;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
         }
 
         /* Settings Panel */
@@ -875,14 +1010,60 @@
                 right: 0;
             }
 
-            #touch-controls {
+            #touch-controls, #touch-controls-left {
                 display: flex;
+            }
+
+            #touch-hint {
+                display: block;
+            }
+
+            #header {
+                padding: 4px 8px;
+            }
+
+            #header .title {
+                font-size: 11px;
+            }
+
+            #header .session-info {
+                display: none;
+            }
+
+            #time-controls .time-btn {
+                padding: 8px 12px;
+            }
+
+            #settings-panel {
+                width: 90%;
+                max-width: 400px;
             }
         }
 
         @media (min-width: 701px) {
-            #touch-controls {
+            #touch-controls, #touch-controls-left {
                 display: none;
+            }
+
+            #touch-hint {
+                display: none !important;
+            }
+        }
+
+        /* Touch-specific improvements */
+        @media (pointer: coarse) {
+            .touch-btn {
+                min-width: 48px;
+                min-height: 48px;
+            }
+
+            #timeline-bar {
+                height: 32px;
+            }
+
+            .time-btn {
+                padding: 10px 16px;
+                font-size: 14px;
             }
         }
     </style>
@@ -1411,15 +1592,41 @@
             </div>
         </div>
 
-        <!-- Touch Controls -->
+        <!-- Touch Controls - Right Side (View) -->
         <div id="touch-controls">
             <button class="touch-btn" id="touch-settings" title="Settings">⚙</button>
+            <button class="touch-btn" id="touch-help" title="Help">?</button>
             <button class="touch-btn" id="touch-zoomin" title="Zoom in">+</button>
             <button class="touch-btn" id="touch-zoomout" title="Zoom out">−</button>
-            <div class="touch-btn-row">
-                <button class="touch-btn" id="touch-play" title="Play/Pause">▶</button>
-                <button class="touch-btn" id="touch-reset" title="Reset view">⟲</button>
+            <button class="touch-btn" id="touch-reset" title="Reset view">⟲</button>
+            <button class="touch-btn" id="touch-screenshot" title="Screenshot">📷</button>
+        </div>
+
+        <!-- Touch Controls - Left Side (Time) -->
+        <div id="touch-controls-left">
+            <button class="touch-btn" id="touch-slower" title="Slower">◄</button>
+            <button class="touch-btn active" id="touch-play" title="Play/Pause">▶</button>
+            <button class="touch-btn" id="touch-faster" title="Faster">►</button>
+            <button class="touch-btn" id="touch-reverse" title="Reverse">⟲</button>
+        </div>
+
+        <!-- Gesture Indicator -->
+        <div id="gesture-indicator">
+            <div class="gesture-icon" id="gesture-icon">👆</div>
+            <div class="gesture-text" id="gesture-text">Panning</div>
+        </div>
+
+        <!-- Zoom Indicator -->
+        <div id="zoom-indicator">
+            <div class="zoom-bar">
+                <div class="zoom-fill" id="zoom-fill" style="width: 50%"></div>
             </div>
+            <div class="zoom-value" id="zoom-value">1.0x</div>
+        </div>
+
+        <!-- Touch Hint -->
+        <div id="touch-hint">
+            Pinch to zoom • Drag to pan • Double-tap to reset
         </div>
 
         <!-- Collapsed UI -->
@@ -1598,11 +1805,18 @@
 
             <h2>TOUCH CONTROLS</h2>
             <div class="shortcuts">
-                <div class="shortcut"><span>1-finger drag</span><span>Pan view</span></div>
-                <div class="shortcut"><span>2-finger pinch</span><span>Zoom in/out</span></div>
-                <div class="shortcut"><span>2-finger drag</span><span>Rotate 3D</span></div>
+                <div class="shortcut"><span>1-finger drag</span><span>Pan view (with momentum)</span></div>
+                <div class="shortcut"><span>2-finger pinch</span><span>Zoom in/out at touch point</span></div>
+                <div class="shortcut"><span>2-finger drag</span><span>Rotate 3D view</span></div>
+                <div class="shortcut"><span>3-finger swipe</span><span>Change time speed</span></div>
                 <div class="shortcut"><span>Double-tap</span><span>Reset view</span></div>
-                <div class="shortcut"><span>Long press</span><span>Particle info</span></div>
+                <div class="shortcut"><span>Long press</span><span>Open settings</span></div>
+            </div>
+
+            <h2>TOUCH BUTTONS</h2>
+            <div class="shortcuts">
+                <div class="shortcut"><span>Left side</span><span>Time controls (slower/play/faster)</span></div>
+                <div class="shortcut"><span>Right side</span><span>View controls (zoom/reset/screenshot)</span></div>
             </div>
         </div>
     </div>

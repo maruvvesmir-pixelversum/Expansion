@@ -14,7 +14,7 @@ export class Renderer {
         this.canvasEffects = canvasEffects;
 
         this.ctxMain = canvasMain.getContext('2d', { alpha: false });
-        this.ctxEffects = canvasEffects.getContext('2d');
+        this.ctxEffects = canvasEffects.getContext('2d', { willReadFrequently: true });
 
         // Initialize LOD system
         this.lodSystem = new LODSystem({

@@ -836,6 +836,56 @@ MISC:
   ` = Console (debug)
 ```
 
+### 5.5 Touch Controls (Mobile & Tablet)
+
+The simulator supports comprehensive touch controls for mobile and tablet devices with momentum-based interactions for a fluid experience.
+
+**Touch Gestures**:
+
+```
+NAVIGATION:
+  1-finger drag     = Pan view (with momentum)
+  2-finger pinch    = Zoom in/out (toward touch point)
+  2-finger drag     = Rotate 3D view
+  3-finger swipe    = Change time speed
+  Double-tap        = Reset view
+  Long press        = Open settings panel
+
+GESTURE FEATURES:
+  - Momentum/inertia for smooth panning
+  - Zoom centers on pinch point
+  - Smooth deceleration after releasing
+  - Visual gesture indicators during interaction
+  - Zoom level indicator during pinch
+```
+
+**Touch Buttons (Mobile)**:
+
+```
+LEFT SIDE (Time Controls):
+  ◄   = Slow down time (0.5x)
+  ▶   = Play/Pause simulation
+  ►   = Speed up time (2x)
+  ⟲   = Reverse time direction
+
+RIGHT SIDE (View Controls):
+  ⚙   = Open settings panel
+  ?   = Open help modal
+  +   = Zoom in
+  −   = Zoom out
+  ⟲   = Reset view
+  📷  = Take screenshot
+```
+
+**Touch Feedback**:
+
+```
+- Gesture indicator shows current gesture type
+- Zoom indicator shows zoom level during pinch
+- First-time hint shows gesture instructions
+- Buttons show press feedback
+```
+
 -----
 
 ## 6. SCIENTIFIC ACCURACY & VALIDATION
