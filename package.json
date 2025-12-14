@@ -1,0 +1,33 @@
+{
+  "name": "universe-evolution-simulator",
+  "version": "1.0.0",
+  "description": "Universe Evolution Simulator - From Big Bang to Heat Death",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build-all": "electron-builder --win --x64"
+  },
+  "keywords": ["physics", "cosmology", "simulation", "universe"],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.universe.simulator",
+    "productName": "Universe Evolution Simulator",
+    "win": {
+      "target": ["nsis"],
+      "icon": "icon.ico"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}

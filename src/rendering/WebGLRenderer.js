@@ -29,6 +29,25 @@ export class WebGLRenderer {
             vignette: true,
             cosmicWeb: false
         };
+
+        // WebGL context loss/restore handlers
+        this.contextLost = false;
+        this.setupContextLossHandlers();
+    }
+
+    setupContextLossHandlers() {
+        this.canvas.addEventListener('webglcontextlost', (event) => {
+            console.error('⚠️ WebGL context lost!');
+            event.preventDefault();
+            this.contextLost = true;
+            this.initialized = false;
+        }, false);
+
+        this.canvas.addEventListener('webglcontextrestored', () => {
+            console.log('✅ WebGL context restored, reinitializing...');
+            this.contextLost = false;
+            this.init();
+        }, false);
     }
 
     init() {
@@ -223,7 +242,12 @@ export class WebGLRenderer {
     }
 
     render(particles, camera, epoch, options = {}) {
-        if (!this.initialized) return 0;
+        // Skip rendering if context is lost or not initialized
+        if (!this.initialized || this.contextLost) return 0;
+        if (!this.gl || this.gl.isContextLost()) {
+            console.warn('⚠️ Skipping render - WebGL context is lost');
+            return 0;
+        }
 
         const startTime = performance.now();
         const gl = this.gl;
@@ -242,10 +266,12 @@ export class WebGLRenderer {
         const hasLayers = epoch.colorLayer1 || epoch.colorLayer2;
         const baseColor = epoch.color || { r: 255, g: 255, b: 255 };
 
+        // PERFORMANCE: Only process active particles, pack them densely
+        let activeCount = 0;
         for (let i = 0; i < count; i++) {
             if (!p.active[i]) continue;
 
-            const offset = i * 8;
+            const offset = activeCount * 8;
             data[offset + 0] = p.x[i];
             data[offset + 1] = p.y[i];
             data[offset + 2] = p.z[i];
@@ -272,42 +298,66 @@ export class WebGLRenderer {
             }
 
             data[offset + 7] = p.brightness[i];
+            activeCount++;
         }
 
+        // Use activeCount instead of count for rendering
+        const renderCount = activeCount;
+
         // Upload data (use subData for better performance)
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.particleBuffer);
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.subarray(0, count * 8));
+        try {
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.particleBuffer);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.subarray(0, renderCount * 8));
 
-        // Clear color and depth
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            // Check for GL errors after buffer upload
+            const bufferError = gl.getError();
+            if (bufferError !== gl.NO_ERROR) {
+                console.error('❌ WebGL error after buffer upload:', bufferError);
+                return 0;
+            }
 
-        // Use program
-        gl.useProgram(this.program);
+            // Clear color and depth
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        // Set uniforms
-        gl.uniform2f(this.locations.uScreenSize, this.canvas.width, this.canvas.height);
-        gl.uniform3f(this.locations.uCamera, -camera.x, -camera.y, camera.z);
-        gl.uniform1f(this.locations.uZoom, camera.zoom);
+            // Use program
+            gl.useProgram(this.program);
 
-        // Set attributes (interleaved)
-        const stride = 8 * 4;  // 8 floats per particle, 4 bytes per float
+            // Set uniforms
+            gl.uniform2f(this.locations.uScreenSize, this.canvas.width, this.canvas.height);
+            gl.uniform3f(this.locations.uCamera, -camera.x, -camera.y, camera.z);
+            gl.uniform1f(this.locations.uZoom, camera.zoom);
 
-        gl.enableVertexAttribArray(this.locations.aPosition);
-        gl.vertexAttribPointer(this.locations.aPosition, 3, gl.FLOAT, false, stride, 0);
+            // Set attributes (interleaved)
+            const stride = 8 * 4;  // 8 floats per particle, 4 bytes per float
 
-        gl.enableVertexAttribArray(this.locations.aSize);
-        gl.vertexAttribPointer(this.locations.aSize, 1, gl.FLOAT, false, stride, 12);
+            gl.enableVertexAttribArray(this.locations.aPosition);
+            gl.vertexAttribPointer(this.locations.aPosition, 3, gl.FLOAT, false, stride, 0);
 
-        gl.enableVertexAttribArray(this.locations.aColor);
-        gl.vertexAttribPointer(this.locations.aColor, 3, gl.FLOAT, false, stride, 16);
+            gl.enableVertexAttribArray(this.locations.aSize);
+            gl.vertexAttribPointer(this.locations.aSize, 1, gl.FLOAT, false, stride, 12);
 
-        gl.enableVertexAttribArray(this.locations.aBrightness);
-        gl.vertexAttribPointer(this.locations.aBrightness, 1, gl.FLOAT, false, stride, 28);
+            gl.enableVertexAttribArray(this.locations.aColor);
+            gl.vertexAttribPointer(this.locations.aColor, 3, gl.FLOAT, false, stride, 16);
 
-        // Draw
-        gl.drawArrays(gl.POINTS, 0, count);
+            gl.enableVertexAttribArray(this.locations.aBrightness);
+            gl.vertexAttribPointer(this.locations.aBrightness, 1, gl.FLOAT, false, stride, 28);
 
-        this.visibleCount = count;
+            // Draw particles
+            gl.drawArrays(gl.POINTS, 0, renderCount);
+
+            // Check for GL errors after draw
+            const drawError = gl.getError();
+            if (drawError !== gl.NO_ERROR) {
+                console.error('❌ WebGL error after drawArrays:', drawError);
+                return 0;
+            }
+        } catch (error) {
+            console.error('❌ WebGL render error:', error);
+            console.error('This may indicate GPU timeout or memory issues');
+            return 0;
+        }
+
+        this.visibleCount = renderCount;
         this.renderTime = performance.now() - startTime;
 
         // Track FPS
