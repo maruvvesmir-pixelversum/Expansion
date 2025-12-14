@@ -27,7 +27,7 @@ export class Simulator {
         // Simulation state
         this.isPlaying = true;
         this.isReversed = false;
-        this.timeSpeed = 1e10;
+        this.timeSpeed = 5e9;  // Slower to see cosmological phases
         this.frameCount = 0;
 
         // Subsystems (initialized in init())
@@ -80,47 +80,26 @@ export class Simulator {
         this.ui.updateLoading('Generating primordial fluctuations...', 15);
         this.particles = new ParticleSystem(SIMULATION.particleCount);
         await this.particles.initialize();
-        console.log('Particles initialized:', this.particles.count);
-        console.log('First particle position:', {
-            x: this.particles.particles.x[0],
-            y: this.particles.particles.y[0],
-            z: this.particles.particles.z[0]
-        });
 
         // Initialize physics engine
         this.ui.updateLoading('Calibrating cosmological parameters...', 40);
         this.physics = new PhysicsEngine();
 
-        // Initialize camera
+        // Initialize camera - zoomed in to see singularity then expansion
         this.ui.updateLoading('Setting up observation systems...', 55);
         this.camera = new Camera({
             x: 0,
             y: 0,
-            z: -300, // Position camera behind particles (negative z looks at positive z)
-            zoom: 4.0, // Zoom in to see particles better
+            z: -100,  // Start closer to see the singularity
+            zoom: 0.5,  // Zoomed out to see full expansion
             rotationX: 0,
             rotationY: 0,
             rotationZ: 0
         });
-        console.log('Camera initialized at:', {
-            x: this.camera.x,
-            y: this.camera.y,
-            z: this.camera.z,
-            zoom: this.camera.zoom,
-            rotationX: this.camera.rotationX,
-            rotationY: this.camera.rotationY
-        });
 
-        // Initialize renderer (try WebGPU first)
+        // Initialize renderer (Canvas 2D only for now)
         this.ui.updateLoading('Initializing visualization engine...', 70);
-        try {
-            this.renderer = new WebGPURenderer(this.canvasMain);
-            await this.renderer.init();
-            console.log('Using WebGPU renderer');
-        } catch (error) {
-            console.warn('WebGPU not available, falling back to Canvas 2D:', error.message);
-            this.renderer = new Renderer(this.canvasMain, this.canvasEffects);
-        }
+        this.renderer = new Renderer(this.canvasMain, this.canvasEffects);
 
         // Initialize input handler
         this.ui.updateLoading('Binding control systems...', 85);
@@ -407,11 +386,10 @@ export class Simulator {
         this.fps = 1 / deltaTime;
         this.frameTime = deltaTime * 1000;
 
-        // Update physics (DISABLED - physics corrupts particle arrays)
-        // TODO: Fix physics bug before re-enabling
-        // if (this.isPlaying && this.frameCount > 1) {
-        //     this.physics.update(this.particles, deltaTime, this.timeSpeed, this.isReversed);
-        // }
+        // Update physics with safety checks enabled
+        if (this.isPlaying) {
+            this.physics.update(this.particles, deltaTime, this.timeSpeed, this.isReversed);
+        }
 
         // Update camera
         this.camera.update(deltaTime);
@@ -421,21 +399,8 @@ export class Simulator {
             this.physics.detectClusters(this.particles);
         }
 
-        // Debug: Check particles before render (first frame only)
-        if (this.frameCount === 1) {
-            console.log('Before first render - particle check:', {
-                firstParticle: {
-                    x: this.particles.particles.x[0],
-                    y: this.particles.particles.y[0],
-                    z: this.particles.particles.z[0]
-                },
-                particlesObject: this.particles,
-                particlesArray: this.particles.particles
-            });
-        }
-
         // Render
-        const visibleCount = this.renderer.render(
+        this.renderer.render(
             this.particles,
             this.camera,
             this.physics.cosmology.currentEpoch,
@@ -443,13 +408,13 @@ export class Simulator {
                 showGrid: this.showGrid,
                 showVelocities: this.showVelocities,
                 tracers: this.tracers,
-                clusters: this.showClusters ? this.physics.getTopClusters(15) : null,
+                clusters: null,
                 currentFPS: this.fps
             }
         );
 
-        // Render effects (every other frame for performance)
-        if (this.frameCount % 2 === 0) {
+        // Render effects less frequently for performance
+        if (this.frameCount % 3 === 0) {
             this.renderer.renderEffects();
         }
 
@@ -458,19 +423,14 @@ export class Simulator {
             this.updateUI();
         }
 
-        // Update graphs (more throttled)
-        if (this.frameCount % 30 === 0) {
+        // Update graphs (heavily throttled for performance)
+        if (this.frameCount % 60 === 0) {
             this.ui.updateHistogram(this.frameCount);
             this.ui.updateGraphs(
                 this.physics.cosmology.scaleHistory,
                 this.physics.cosmology.tempHistory
             );
             this.particles.updateStatistics();
-        }
-
-        // Debug: Log first render
-        if (this.frameCount === 1) {
-            console.log('First render - Visible particles:', visibleCount, '/ Total:', this.particles.count);
         }
 
         // Request next frame

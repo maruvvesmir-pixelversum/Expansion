@@ -95,12 +95,23 @@ export class Octree {
             const y = particles.y[i];
             const z = particles.z[i];
 
+            // Skip particles with invalid positions
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) {
+                continue;
+            }
+
             if (x < minX) minX = x;
             if (y < minY) minY = y;
             if (z < minZ) minZ = z;
             if (x > maxX) maxX = x;
             if (y > maxY) maxY = y;
             if (z > maxZ) maxZ = z;
+        }
+
+        // Safety check: ensure we found valid bounds
+        if (!isFinite(minX) || !isFinite(maxX)) {
+            this.root = null;
+            return;
         }
 
         // Add small padding

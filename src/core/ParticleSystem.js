@@ -83,15 +83,6 @@ export class ParticleSystem {
             visible: new Uint8Array(n)
         };
 
-        console.log('Particle arrays created:', {
-            xArrayLength: this.particles.x.length,
-            yArrayLength: this.particles.y.length,
-            zArrayLength: this.particles.z.length,
-            firstX: this.particles.x[0],
-            firstY: this.particles.y[0],
-            firstZ: this.particles.z[0]
-        });
-
         await this.generateInitialConditions();
     }
 
@@ -100,8 +91,8 @@ export class ParticleSystem {
      */
     async generateInitialConditions(config = {}) {
         const {
-            distribution = 'spherical',
-            radius = 50,
+            distribution = 'singularity',  // START FROM BIG BANG SINGULARITY
+            radius = 0.1,  // Very small initial radius (singularity)
             perturbationAmplitude = SIMULATION.perturbationAmplitude,
             hubbleVelocity = 0.001,
             thermalVelocity = 0.1
@@ -111,47 +102,43 @@ export class ParticleSystem {
         const p = this.particles;
 
         for (let i = 0; i < n; i++) {
-            // Generate position based on distribution type
+            // Start from SINGULARITY - tiny dense point
             let pos;
-            switch (distribution) {
-                case 'grid':
-                    pos = this.generateGridPosition(i, n, radius);
-                    break;
-                case 'gaussian':
-                    pos = this.generateGaussianPosition(radius);
-                    break;
-                case 'dual_cluster':
-                    pos = this.generateDualClusterPosition(i, n, radius);
-                    break;
-                case 'spherical':
-                default:
-                    pos = this.generateSphericalPosition(radius);
-                    break;
+            if (distribution === 'singularity') {
+                // All particles start very close together (Planck epoch)
+                const r = radius * Math.cbrt(Math.random());
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                pos = new Vec3(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.sin(phi) * Math.sin(theta),
+                    r * Math.cos(phi)
+                );
+            } else {
+                pos = this.generateSphericalPosition(radius);
             }
 
-            // Add primordial perturbations
-            pos.x += (Math.random() - 0.5) * perturbationAmplitude * radius;
-            pos.y += (Math.random() - 0.5) * perturbationAmplitude * radius;
-            pos.z += (Math.random() - 0.5) * perturbationAmplitude * radius;
+            // Tiny primordial quantum fluctuations
+            pos.x += (Math.random() - 0.5) * perturbationAmplitude * 0.01;
+            pos.y += (Math.random() - 0.5) * perturbationAmplitude * 0.01;
+            pos.z += (Math.random() - 0.5) * perturbationAmplitude * 0.01;
 
             p.x[i] = pos.x;
             p.y[i] = pos.y;
             p.z[i] = pos.z;
 
-            // Debug first particle
-            if (i === 0) {
-                console.log('First particle generation:', {
-                    pos: { x: pos.x, y: pos.y, z: pos.z },
-                    stored: { x: p.x[i], y: p.y[i], z: p.z[i] },
-                    distribution: distribution,
-                    radius: radius
-                });
-            }
+            // Initial velocities: Radial expansion (Big Bang!) + thermal motion
+            const radialSpeed = 0.5;  // Initial expansion velocity
+            const distance = Math.sqrt(pos.x**2 + pos.y**2 + pos.z**2);
+            const normalizedDir = distance > 0 ? {
+                x: pos.x / distance,
+                y: pos.y / distance,
+                z: pos.z / distance
+            } : { x: 0, y: 0, z: 0 };
 
-            // Initial velocities: Hubble flow + thermal
-            p.vx[i] = pos.x * hubbleVelocity + (Math.random() - 0.5) * thermalVelocity;
-            p.vy[i] = pos.y * hubbleVelocity + (Math.random() - 0.5) * thermalVelocity;
-            p.vz[i] = pos.z * hubbleVelocity + (Math.random() - 0.5) * thermalVelocity;
+            p.vx[i] = normalizedDir.x * radialSpeed + (Math.random() - 0.5) * thermalVelocity * 0.1;
+            p.vy[i] = normalizedDir.y * radialSpeed + (Math.random() - 0.5) * thermalVelocity * 0.1;
+            p.vz[i] = normalizedDir.z * radialSpeed + (Math.random() - 0.5) * thermalVelocity * 0.1;
 
             // Mass: power-law distribution (Schechter-like)
             p.mass[i] = 1e10 * Math.pow(Math.random() + 0.1, -2.3);
@@ -185,26 +172,6 @@ export class ParticleSystem {
 
         // Calculate initial statistics
         this.updateStatistics();
-
-        // Debug: Check final state
-        console.log('Particle generation complete:', {
-            count: n,
-            firstParticle: {
-                x: p.x[0],
-                y: p.y[0],
-                z: p.z[0],
-                vx: p.vx[0],
-                vy: p.vy[0],
-                vz: p.vz[0],
-                mass: p.mass[0],
-                temp: p.temperature[0]
-            },
-            lastParticle: {
-                x: p.x[n-1],
-                y: p.y[n-1],
-                z: p.z[n-1]
-            }
-        });
 
         // Allow UI to update during initialization
         await new Promise(resolve => setTimeout(resolve, 0));

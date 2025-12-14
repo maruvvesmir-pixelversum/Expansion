@@ -7,12 +7,12 @@
 
 export class LODSystem {
     constructor(config = {}) {
-        // LOD distance thresholds (in world units)
+        // LOD distance thresholds - AGGRESSIVE for performance
         this.levels = config.levels ?? [
-            { distance: 0, renderRatio: 1.0, sizeMultiplier: 1.0, glowRadius: 8 },     // LOD 0: Close
-            { distance: 100, renderRatio: 0.5, sizeMultiplier: 0.8, glowRadius: 4 },   // LOD 1: Medium
-            { distance: 500, renderRatio: 0.2, sizeMultiplier: 0.5, glowRadius: 2 },   // LOD 2: Far
-            { distance: 2000, renderRatio: 0.05, sizeMultiplier: 0.3, glowRadius: 1 }  // LOD 3: Very far
+            { distance: 0, renderRatio: 1.0, sizeMultiplier: 1.0, glowRadius: 3 },     // LOD 0: Close
+            { distance: 100, renderRatio: 0.3, sizeMultiplier: 0.8, glowRadius: 2 },   // LOD 1: Medium - more aggressive
+            { distance: 300, renderRatio: 0.15, sizeMultiplier: 0.6, glowRadius: 1 },  // LOD 2: Far - more aggressive
+            { distance: 600, renderRatio: 0.05, sizeMultiplier: 0.4, glowRadius: 0 }   // LOD 3: Very far - very aggressive
         ];
 
         // Adaptive quality settings
@@ -47,13 +47,13 @@ export class LODSystem {
         // Calculate average FPS
         this.avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
 
-        // Adjust quality
-        if (this.avgFPS < 45) {
-            // Performance critical - reduce quality
-            this.qualityLevel = Math.max(0.3, this.qualityLevel - 0.05);
+        // Adjust quality - MORE AGGRESSIVE
+        if (this.avgFPS < 50) {
+            // Performance critical - reduce quality faster
+            this.qualityLevel = Math.max(0.2, this.qualityLevel - 0.1);
         } else if (this.avgFPS > 58 && this.qualityLevel < 1.0) {
-            // Headroom available - increase quality
-            this.qualityLevel = Math.min(1.0, this.qualityLevel + 0.02);
+            // Headroom available - increase quality slowly
+            this.qualityLevel = Math.min(1.0, this.qualityLevel + 0.01);
         }
 
         this.stats.qualityLevel = this.qualityLevel;
@@ -134,16 +134,6 @@ export class LODSystem {
 
             if (!projected.visible) {
                 culledByProjection++;
-                // Debug first particle
-                if (i === 0) {
-                    console.log('LOD: First particle culled by projection:', {
-                        world: { x: p.x[i], y: p.y[i], z: p.z[i] },
-                        projected: { x: projected.x, y: projected.y, z: projected.z },
-                        visible: projected.visible,
-                        viewport: { width: camera.width, height: camera.height },
-                        camera: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom }
-                    });
-                }
                 continue;
             }
 
@@ -187,20 +177,6 @@ export class LODSystem {
         }
 
         this.stats.totalRendered = visible.length;
-
-        // Debug logging once
-        if (!this._debugLogged) {
-            console.log('LOD System Stats:', {
-                totalParticles: n,
-                checkedParticles: checkedCount,
-                culledByProjection: culledByProjection,
-                culledByLOD: culledByLOD,
-                visible: visible.length,
-                stride: stride,
-                qualityLevel: this.qualityLevel
-            });
-            this._debugLogged = true;
-        }
 
         return visible;
     }

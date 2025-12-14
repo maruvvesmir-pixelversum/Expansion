@@ -63,18 +63,19 @@ export class PhysicsEngine {
         // Update cosmology
         const cosmoState = this.cosmology.update(scaledDt, isReversed);
 
-        // Only apply physics after Planck era and not in reverse
-        if (this.cosmology.time > 1e-32 && !isReversed) {
-            // Apply cosmic expansion
+        // Apply physics throughout evolution
+        if (!isReversed) {
+            // Apply cosmic expansion (starts IMMEDIATELY - inflation!)
             const expansionStart = performance.now();
             this.applyExpansion(particles, scaledDt / timeSpeed);
             this.expansionTime = performance.now() - expansionStart;
 
-            // Apply gravity after recombination (structure formation begins)
-            if (this.cosmology.time > 1.2e13) {
+            // Apply gravity after matter-radiation equality (~50,000 years)
+            if (this.cosmology.time > 1.5e12) {
                 const gravityStart = performance.now();
 
-                if (this.useBarnesHut && particles.count <= 100000) {
+                // Use grid gravity for better performance with many particles
+                if (particles.count <= 5000 && this.useBarnesHut) {
                     this.applyBarnesHutGravity(particles, scaledDt / timeSpeed);
                 } else {
                     this.applyGridGravity(particles, scaledDt / timeSpeed);
@@ -116,8 +117,19 @@ export class PhysicsEngine {
         // Scale expansion rate for simulation
         const expansionRate = H * 1e-6;
 
-        const factor = 1 + expansionRate * dt;
-        const velocityFactor = 1 / (1 + expansionRate * dt * 0.5);
+        // Clamp expansion to prevent numerical overflow
+        // Maximum 10% expansion/contraction per frame
+        const maxExpansion = 0.1;
+        const clampedExpansion = Math.max(-maxExpansion, Math.min(maxExpansion, expansionRate * dt));
+
+        const factor = 1 + clampedExpansion;
+        const velocityFactor = 1 / (1 + clampedExpansion * 0.5);
+
+        // Safety check: ensure factors are finite and reasonable
+        if (!isFinite(factor) || !isFinite(velocityFactor) || factor <= 0) {
+            console.warn('Invalid expansion factors, skipping expansion', { factor, velocityFactor, H, z });
+            return;
+        }
 
         const p = particles.particles;
         const n = particles.count;
@@ -149,13 +161,29 @@ export class PhysicsEngine {
         const softeningSq = this.softening * this.softening;
 
         for (let i = 0; i < n; i++) {
+            // Skip particles with invalid positions
+            if (!isFinite(p.x[i]) || !isFinite(p.y[i]) || !isFinite(p.z[i])) {
+                continue;
+            }
+
             const force = this.octree.calculateForce(i, p, this.G, softeningSq);
+
+            // Safety check: ensure force is finite
+            if (!isFinite(force.x) || !isFinite(force.y) || !isFinite(force.z)) {
+                continue;
+            }
 
             // Apply acceleration (F = ma, a = F/m)
             const invMass = 1 / p.mass[i];
-            p.vx[i] += force.x * invMass * dt;
-            p.vy[i] += force.y * invMass * dt;
-            p.vz[i] += force.z * invMass * dt;
+            const dvx = force.x * invMass * dt;
+            const dvy = force.y * invMass * dt;
+            const dvz = force.z * invMass * dt;
+
+            // Clamp acceleration to prevent numerical instability
+            const maxDv = 100; // Maximum velocity change per frame
+            p.vx[i] += Math.max(-maxDv, Math.min(maxDv, dvx));
+            p.vy[i] += Math.max(-maxDv, Math.min(maxDv, dvy));
+            p.vz[i] += Math.max(-maxDv, Math.min(maxDv, dvz));
         }
     }
 
@@ -240,9 +268,26 @@ export class PhysicsEngine {
         const n = particles.count;
 
         for (let i = 0; i < n; i++) {
-            p.x[i] += p.vx[i] * dt;
-            p.y[i] += p.vy[i] * dt;
-            p.z[i] += p.vz[i] * dt;
+            // Safety check: ensure velocities and positions are finite
+            if (!isFinite(p.vx[i])) p.vx[i] = 0;
+            if (!isFinite(p.vy[i])) p.vy[i] = 0;
+            if (!isFinite(p.vz[i])) p.vz[i] = 0;
+
+            // Integrate position
+            const dx = p.vx[i] * dt;
+            const dy = p.vy[i] * dt;
+            const dz = p.vz[i] * dt;
+
+            // Clamp maximum movement per frame
+            const maxMove = 50;
+            p.x[i] += Math.max(-maxMove, Math.min(maxMove, dx));
+            p.y[i] += Math.max(-maxMove, Math.min(maxMove, dy));
+            p.z[i] += Math.max(-maxMove, Math.min(maxMove, dz));
+
+            // Final safety check
+            if (!isFinite(p.x[i])) p.x[i] = 0;
+            if (!isFinite(p.y[i])) p.y[i] = 0;
+            if (!isFinite(p.z[i])) p.z[i] = 0;
         }
     }
 

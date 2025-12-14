@@ -69,7 +69,7 @@ export const DEFAULT_COSMOLOGY = {
 
 // Simulation Configuration Defaults
 export const SIMULATION = {
-    particleCount: 10000,  // Reduced for Canvas 2D performance
+    particleCount: 10000,  // Optimized for performance
     maxParticleCount: 4000000,
     minParticleCount: 10000,
     softeningLength: 1.0,           // kpc

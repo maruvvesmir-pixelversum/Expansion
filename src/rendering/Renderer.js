@@ -22,24 +22,24 @@ export class Renderer {
             adaptiveEnabled: true
         });
 
-        // Rendering settings
-        this.particleSizeMultiplier = 3.0;  // Larger particles for visibility
-        this.maxVisibleParticles = 5000;  // Performance limit for Canvas 2D
+        // Rendering settings - Optimized for early universe (small) → late universe (large)
+        this.particleSizeMultiplier = 2.5;  // Smaller for better performance
+        this.maxVisibleParticles = 2000;  // Aggressive limit for smooth FPS
         this.renderStride = 1;
 
-        // Visual effects
+        // Visual effects - Minimal for performance
         this.effects = {
-            bloom: true,
-            bloomIntensity: 0.7,
-            motionBlur: true,
-            motionBlurLength: 20,
-            filmGrain: true,
-            grainIntensity: 0.05,
-            vignette: true,
-            vignetteIntensity: 0.3,
-            cosmicWeb: false,
-            cosmicWebDensity: 0.15,
-            useLOD: true  // Enable LOD for performance
+            bloom: false,  // Disable for better performance
+            bloomIntensity: 0,
+            motionBlur: false,
+            motionBlurLength: 0,
+            filmGrain: false,
+            grainIntensity: 0,
+            vignette: false,
+            vignetteIntensity: 0,
+            cosmicWeb: true,  // Enable to see structure formation!
+            cosmicWebDensity: 0.1,
+            useLOD: true  // Critical for performance
         };
 
         // Render statistics
@@ -74,18 +74,6 @@ export class Renderer {
     render(particles, camera, epoch, options = {}) {
         const renderStart = performance.now();
 
-        // Debug: Check particles at render entry
-        if (!this._renderEntryLogged) {
-            console.log('Render() entry - particles received:', {
-                particlesArg: particles,
-                hasParticlesProperty: !!particles.particles,
-                firstX: particles.particles?.x?.[0],
-                firstY: particles.particles?.y?.[0],
-                firstZ: particles.particles?.z?.[0]
-            });
-            this._renderEntryLogged = true;
-        }
-
         const ctx = this.ctxMain;
         const width = this.canvasMain.width;
         const height = this.canvasMain.height;
@@ -98,6 +86,21 @@ export class Renderer {
         if (width === 0 || height === 0) {
             console.warn('Renderer: Canvas has zero size', { width, height });
             return 0;
+        }
+
+        // Debug first render
+        if (!this._firstRenderLogged) {
+            console.log('[RENDER] First render call:', {
+                particleCount: particles.count,
+                canvasSize: { width, height },
+                cameraPos: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom },
+                firstParticle: {
+                    x: particles.particles.x[0],
+                    y: particles.particles.y[0],
+                    z: particles.particles.z[0]
+                }
+            });
+            this._firstRenderLogged = true;
         }
 
         // Update LOD system with current FPS
@@ -129,13 +132,19 @@ export class Renderer {
         // Sort by depth (back to front)
         this.visibleParticles.sort((a, b) => b.z - a.z);
 
-        // Debug: Log particle count once
-        if (!this._loggedOnce) {
-            console.log('Renderer: Visible particles:', this.visibleParticles.length, 'Total:', particles.count);
-            if (this.visibleParticles.length > 0) {
-                console.log('First particle:', this.visibleParticles[0]);
-            }
-            this._loggedOnce = true;
+        // Debug visibility
+        if (!this._visibilityLogged && this.visibleParticles.length === 0) {
+            console.warn('[RENDER] No visible particles!', {
+                totalParticles: particles.count,
+                useLOD: this.effects.useLOD,
+                maxVisible: this.maxVisibleParticles,
+                cameraPos: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom }
+            });
+            this._visibilityLogged = true;
+        } else if (!this._visibilityLogged && this.visibleParticles.length > 0) {
+            console.log('[RENDER] Visible particles:', this.visibleParticles.length, '/', particles.count);
+            console.log('[RENDER] First visible particle:', this.visibleParticles[0]);
+            this._visibilityLogged = true;
         }
 
         // Draw grid if enabled
@@ -217,38 +226,6 @@ export class Renderer {
                 alpha: Math.min(1, 0.4 + p.brightness[i] * 0.6),
                 brightness: p.brightness[i]
             });
-        }
-
-        // Debug logging
-        if (!this._cullingLogged) {
-            console.log('Culling stats:', {
-                totalParticles: n,
-                checkedParticles: checkedCount,
-                culled: culledCount,
-                visible: this.visibleParticles.length,
-                stride: stride
-            });
-            if (this.visibleParticles.length > 0) {
-                const sample = this.visibleParticles[0];
-                console.log('Sample visible particle:', sample);
-                console.log('Particle render properties:', {
-                    screenPos: { x: sample.x, y: sample.y },
-                    size: sample.size,
-                    color: { r: sample.r, g: sample.g, b: sample.b },
-                    alpha: sample.alpha
-                });
-            } else if (checkedCount > 0) {
-                // Log first particle projection details
-                const testProj = camera.project(p.x[0], p.y[0], p.z[0]);
-                console.log('First particle projection test:', {
-                    world: { x: p.x[0], y: p.y[0], z: p.z[0] },
-                    screen: { x: testProj.x, y: testProj.y, z: testProj.z },
-                    visible: testProj.visible,
-                    viewport: { width: camera.width, height: camera.height },
-                    camera: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom }
-                });
-            }
-            this._cullingLogged = true;
         }
 
         this.visibleCount = this.visibleParticles.length;
