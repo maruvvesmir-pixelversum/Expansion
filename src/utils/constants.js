@@ -69,8 +69,8 @@ export const DEFAULT_COSMOLOGY = {
 
 // Simulation Configuration Defaults
 export const SIMULATION = {
-    particleCount: 10000,  // Optimized for performance
-    maxParticleCount: 4000000,
+    particleCount: 100000,  // 100k particles - WebGPU can handle this easily!
+    maxParticleCount: 1000000,
     minParticleCount: 10000,
     softeningLength: 1.0,           // kpc
     barnesHutTheta: 0.5,            // Opening angle for tree gravity
@@ -82,13 +82,13 @@ export const SIMULATION = {
 
 // Visual Configuration
 export const VISUAL = {
-    defaultZoom: 1.0,
-    maxZoom: 100,
-    minZoom: 0.1,
+    defaultZoom: 3.0,  // Lower zoom to see more particles spread out
+    maxZoom: 10000,  // Allow MASSIVE zoom in
+    minZoom: 0.0001,  // Allow zooming VERY far out to see whole universe
     defaultFOV: 60,
-    cameraDistance: 100,
-    particleMinSize: 0.3,
-    particleMaxSize: 2.0,
+    cameraDistance: 150,  // Further back to see the full expansion
+    particleMinSize: 1.0,  // Larger minimum size for visibility
+    particleMaxSize: 4.0,  // Larger maximum size
     bloomRadius: 8,
     motionBlurLength: 20,
     filmGrainIntensity: 0.05,

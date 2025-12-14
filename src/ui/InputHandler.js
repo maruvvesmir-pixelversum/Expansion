@@ -224,39 +224,72 @@ export class InputHandler {
 
         // Camera movement keys (continuous)
         const moveSpeed = 30;
+        const zMoveSpeed = 80;  // Much faster Z movement for dramatic 3D navigation
         switch (key) {
             case 'w':
             case 'arrowup':
-                if (this.callbacks.onCameraMove) {
-                    this.callbacks.onCameraMove(0, -moveSpeed, 0);
+                if (shift) {
+                    // Shift+W: Move forward in 3D space (Z-axis)
+                    if (this.callbacks.onCameraMove) {
+                        this.callbacks.onCameraMove(0, 0, -zMoveSpeed);
+                    }
+                } else {
+                    // W: Move up (Y-axis)
+                    if (this.callbacks.onCameraMove) {
+                        this.callbacks.onCameraMove(0, -moveSpeed, 0);
+                    }
                 }
                 break;
             case 's':
             case 'arrowdown':
-                if (!ctrl && this.callbacks.onCameraMove) {
-                    this.callbacks.onCameraMove(0, moveSpeed, 0);
+                if (shift) {
+                    // Shift+S: Move backward in 3D space (Z-axis)
+                    if (this.callbacks.onCameraMove) {
+                        this.callbacks.onCameraMove(0, 0, zMoveSpeed);
+                    }
+                } else if (!ctrl) {
+                    // S: Move down (Y-axis)
+                    if (this.callbacks.onCameraMove) {
+                        this.callbacks.onCameraMove(0, moveSpeed, 0);
+                    }
                 }
                 break;
             case 'a':
             case 'arrowleft':
+                // A: Move left (X-axis)
                 if (this.callbacks.onCameraMove) {
                     this.callbacks.onCameraMove(-moveSpeed, 0, 0);
                 }
                 break;
             case 'd':
             case 'arrowright':
+                // D: Move right (X-axis)
                 if (this.callbacks.onCameraMove) {
                     this.callbacks.onCameraMove(moveSpeed, 0, 0);
                 }
                 break;
             case 'q':
+                // Q: Rotate left (yaw)
                 if (this.callbacks.onCameraRotate) {
                     this.callbacks.onCameraRotate(-0.1, 0);
                 }
                 break;
             case 'e':
+                // E: Rotate right (yaw)
                 if (this.callbacks.onCameraRotate) {
                     this.callbacks.onCameraRotate(0.1, 0);
+                }
+                break;
+            case 'z':
+                // Z: Move forward (alternative)
+                if (this.callbacks.onCameraMove) {
+                    this.callbacks.onCameraMove(0, 0, -zMoveSpeed);
+                }
+                break;
+            case 'x':
+                // X: Move backward (alternative)
+                if (this.callbacks.onCameraMove) {
+                    this.callbacks.onCameraMove(0, 0, zMoveSpeed);
                 }
                 break;
             case '=':

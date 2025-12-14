@@ -6,6 +6,7 @@
  */
 
 import { EPOCHS } from '../data/epochs.js';
+import { DETAILED_EPOCHS } from '../data/detailedEpochs.js';
 import { UNITS } from '../utils/constants.js';
 
 export class UIManager {
@@ -274,6 +275,7 @@ export class UIManager {
      * Update effects status
      */
     updateEffects(effects) {
+        if (!effects) return;
         this.setText('fx-bloom', effects.bloom ? 'ON' : 'OFF');
         this.setText('fx-motion', effects.motionBlur ? 'ON' : 'OFF');
         this.setText('fx-grain', effects.filmGrain ? 'ON' : 'OFF');
@@ -392,22 +394,48 @@ export class UIManager {
     }
 
     /**
-     * Initialize epoch markers on timeline
+     * Initialize epoch markers on timeline with detailed epochs
      */
     initEpochMarkers() {
         const container = document.getElementById('epoch-markers');
         if (!container) return;
 
+        // Clear existing markers
+        container.innerHTML = '';
+
         const presentTime = 13.798 * UNITS.Gyr_to_s;
         const futureTime = presentTime * 10;
 
-        EPOCHS.forEach(epoch => {
+        // Create markers for major epochs (filter to reduce clutter)
+        const majorEpochs = DETAILED_EPOCHS.filter((epoch, index) => {
+            // Show every 3rd epoch to avoid overcrowding
+            return index % 3 === 0 || epoch.id === 'recombination' || epoch.id === 'first_galaxies' || epoch.id === 'present';
+        });
+
+        majorEpochs.forEach((epoch, index) => {
             if (epoch.timeStart > 0) {
                 const progress = (epoch.timeStart / futureTime) * 100;
-                const marker = document.createElement('div');
-                marker.className = 'epoch-marker';
-                marker.style.left = progress + '%';
-                container.appendChild(marker);
+
+                // Only show markers that are visible (0-100%)
+                if (progress >= 0 && progress <= 100) {
+                    const marker = document.createElement('div');
+                    marker.className = 'epoch-marker';
+                    marker.style.left = progress + '%';
+                    marker.title = `${epoch.name} (${this.formatTime(epoch.timeStart)})`;
+                    marker.dataset.epochId = epoch.id;
+                    marker.dataset.epochTime = epoch.timeStart;
+
+                    // Add click handler to jump to epoch
+                    marker.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (window.simulator) {
+                            window.simulator.physics.cosmology.jumpToTime(epoch.timeStart);
+                            this.showNotification(`Jumped to ${epoch.name}`);
+                        }
+                    });
+
+                    container.appendChild(marker);
+                }
             }
         });
     }

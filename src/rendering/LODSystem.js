@@ -7,12 +7,13 @@
 
 export class LODSystem {
     constructor(config = {}) {
-        // LOD distance thresholds - AGGRESSIVE for performance
+        // LOD distance thresholds - ULTRA-AGGRESSIVE for 1M particles!
         this.levels = config.levels ?? [
-            { distance: 0, renderRatio: 1.0, sizeMultiplier: 1.0, glowRadius: 3 },     // LOD 0: Close
-            { distance: 100, renderRatio: 0.3, sizeMultiplier: 0.8, glowRadius: 2 },   // LOD 1: Medium - more aggressive
-            { distance: 300, renderRatio: 0.15, sizeMultiplier: 0.6, glowRadius: 1 },  // LOD 2: Far - more aggressive
-            { distance: 600, renderRatio: 0.05, sizeMultiplier: 0.4, glowRadius: 0 }   // LOD 3: Very far - very aggressive
+            { distance: 0, renderRatio: 0.5, sizeMultiplier: 1.0, glowRadius: 3, updateFreq: 1 },      // LOD 0: Close - 50%
+            { distance: 50, renderRatio: 0.15, sizeMultiplier: 0.9, glowRadius: 2, updateFreq: 2 },    // LOD 1: Medium - 15%
+            { distance: 150, renderRatio: 0.05, sizeMultiplier: 0.7, glowRadius: 1, updateFreq: 4 },   // LOD 2: Far - 5%
+            { distance: 400, renderRatio: 0.01, sizeMultiplier: 0.5, glowRadius: 0, updateFreq: 8 },   // LOD 3: Very far - 1%
+            { distance: 800, renderRatio: 0.002, sizeMultiplier: 0.3, glowRadius: 0, updateFreq: 16 }  // LOD 4: Extreme - 0.2%
         ];
 
         // Adaptive quality settings
@@ -110,8 +111,9 @@ export class LODSystem {
 
     /**
      * Process particles and return LOD-filtered visible list
+     * ULTRA-AGGRESSIVE: Max 20k visible particles for 60fps with 1M total
      */
-    processParticles(particles, camera, maxVisible = 150000) {
+    processParticles(particles, camera, maxVisible = 20000) {
         const p = particles.particles;
         const n = particles.count;
 

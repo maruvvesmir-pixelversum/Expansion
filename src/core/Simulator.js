@@ -7,10 +7,12 @@
  */
 
 import { SIMULATION, COSMOLOGICAL, UNITS } from '../utils/constants.js';
-import { EPOCHS, FUTURE_SCENARIOS, getEpochByIndex } from '../data/epochs.js';
+import { DETAILED_EPOCHS, getEpochByIndex } from '../data/detailedEpochs.js';
+import { EPOCHS, FUTURE_SCENARIOS } from '../data/epochs.js'; // Keep for backwards compatibility
 import { ParticleSystem } from './ParticleSystem.js';
+import { ParticleEvolution } from './ParticleEvolution.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
-import { WebGPURenderer } from '../rendering/WebGPURenderer.js';
+import { WebGLRenderer } from '../rendering/WebGLRenderer.js';
 import { Renderer } from '../rendering/Renderer.js';
 import { Camera } from '../ui/Camera.js';
 import { UIManager } from '../ui/UIManager.js';
@@ -30,9 +32,14 @@ export class Simulator {
         this.timeSpeed = 5e9;  // Slower to see cosmological phases
         this.frameCount = 0;
 
+        // PERFORMANCE: Frame skipping for low FPS
+        this.renderFrameCounter = 0;
+        this.enableFrameSkipping = true;
+
         // Subsystems (initialized in init())
         this.particles = null;
         this.physics = null;
+        this.particleEvolution = null;
         this.renderer = null;
         this.camera = null;
         this.ui = null;
@@ -62,6 +69,9 @@ export class Simulator {
 
         // Present time for timeline calculations
         this.presentTime = COSMOLOGICAL.age_universe * UNITS.Gyr_to_s;
+
+        // Timeline drag state
+        this.timelineDragging = false;
     }
 
     /**
@@ -85,6 +95,10 @@ export class Simulator {
         this.ui.updateLoading('Calibrating cosmological parameters...', 40);
         this.physics = new PhysicsEngine();
 
+        // Initialize particle evolution system
+        this.ui.updateLoading('Initializing evolution timeline...', 50);
+        this.particleEvolution = new ParticleEvolution(this.particles, this.physics.cosmology);
+
         // Initialize camera - zoomed in to see singularity then expansion
         this.ui.updateLoading('Setting up observation systems...', 55);
         this.camera = new Camera({
@@ -97,9 +111,12 @@ export class Simulator {
             rotationZ: 0
         });
 
-        // Initialize renderer (Canvas 2D only for now)
-        this.ui.updateLoading('Initializing visualization engine...', 70);
-        this.renderer = new Renderer(this.canvasMain, this.canvasEffects);
+        // Initialize WebGL renderer for high performance 3D
+        this.ui.updateLoading('Initializing WebGL 3D engine...', 70);
+
+        this.renderer = new WebGLRenderer(this.canvasMain);
+        this.renderer.init();
+        console.log('✅ WebGL Renderer - 100k particles in 3D');
 
         // Initialize input handler
         this.ui.updateLoading('Binding control systems...', 85);
@@ -151,10 +168,16 @@ export class Simulator {
      */
     setupInput() {
         this.input = new InputHandler(this.canvasMain, {
-            // Camera controls
+            // Camera controls (full 3D movement)
             onCameraMove: (dx, dy, dz) => {
                 this.camera.stopPan(); // Stop any smooth pan
-                this.camera.pan(dx, dy);
+                if (dz !== undefined && dz !== 0) {
+                    // 3D movement with Z-axis
+                    this.camera.move(dx, dy, dz);
+                } else {
+                    // 2D panning (XY only)
+                    this.camera.pan(dx, dy);
+                }
             },
             onCameraRotate: (dx, dy) => {
                 this.camera.rotate(dx, dy);
@@ -286,8 +309,71 @@ export class Simulator {
         // Hide touch hint after first interaction
         this.setupTouchHint();
 
-        // Timeline click
-        document.getElementById('timeline-bar')?.addEventListener('click', (e) => this.handleTimelineClick(e));
+        // Timeline scrubbing (click and drag)
+        const timelineBar = document.getElementById('timeline-bar');
+        if (timelineBar) {
+            timelineBar.addEventListener('mousedown', (e) => {
+                this.timelineDragging = true;
+                this.handleTimelineScrub(e);
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (this.timelineDragging) {
+                    this.handleTimelineScrub(e);
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                this.timelineDragging = false;
+            });
+
+            // Also support simple click
+            timelineBar.addEventListener('click', (e) => this.handleTimelineScrub(e));
+        }
+
+        // Zoom controls (slider and buttons)
+        const zoomSlider = document.getElementById('zoom-slider');
+        if (zoomSlider) {
+            // Logarithmic mapping: slider value -40 to 40 → zoom 0.0001x to 10000x
+            zoomSlider.addEventListener('input', (e) => {
+                const sliderValue = parseFloat(e.target.value);
+                // Exponential mapping: zoom = 10^(sliderValue/10)
+                const zoom = Math.pow(10, sliderValue / 10);
+                this.camera.setZoom(zoom, false);
+                this.showZoomIndicator();
+            });
+            // Set initial slider value based on current zoom
+            const initialSlider = Math.log10(this.camera.zoom) * 10;
+            zoomSlider.value = initialSlider.toFixed(1);
+        }
+
+        document.getElementById('zoom-in-btn')?.addEventListener('click', () => {
+            this.camera.zoomBy(1.5);
+            this.showZoomIndicator();
+            // Update slider
+            if (zoomSlider) {
+                zoomSlider.value = (Math.log10(this.camera.zoom) * 10).toFixed(1);
+            }
+        });
+
+        document.getElementById('zoom-out-btn')?.addEventListener('click', () => {
+            this.camera.zoomBy(1/1.5);
+            this.showZoomIndicator();
+            // Update slider
+            if (zoomSlider) {
+                zoomSlider.value = (Math.log10(this.camera.zoom) * 10).toFixed(1);
+            }
+        });
+
+        document.getElementById('zoom-reset-btn')?.addEventListener('click', () => {
+            const defaultZoom = 5.0;
+            this.camera.setZoom(defaultZoom, false);
+            this.showZoomIndicator();
+            // Update slider
+            if (zoomSlider) {
+                zoomSlider.value = (Math.log10(defaultZoom) * 10).toFixed(1);
+            }
+        });
 
         // Modal close buttons
         document.getElementById('close-help')?.addEventListener('click', () => this.ui.toggleHelp());
@@ -388,7 +474,16 @@ export class Simulator {
 
         // Update physics with safety checks enabled
         if (this.isPlaying) {
-            this.physics.update(this.particles, deltaTime, this.timeSpeed, this.isReversed);
+            const physicsResult = this.physics.update(this.particles, deltaTime, this.timeSpeed, this.isReversed, this.fps);
+
+            // Update particle evolution (visual properties)
+            const cosmoState = physicsResult.cosmologyState;
+            this.particleEvolution.update(
+                deltaTime,
+                cosmoState.epoch,
+                cosmoState.nextEpoch,
+                cosmoState.epochProgress
+            );
         }
 
         // Update camera
@@ -399,23 +494,41 @@ export class Simulator {
             this.physics.detectClusters(this.particles);
         }
 
-        // Render
-        this.renderer.render(
-            this.particles,
-            this.camera,
-            this.physics.cosmology.currentEpoch,
-            {
-                showGrid: this.showGrid,
-                showVelocities: this.showVelocities,
-                tracers: this.tracers,
-                clusters: null,
-                currentFPS: this.fps
-            }
-        );
+        // PERFORMANCE: Adaptive frame skipping based on FPS
+        // Skip rendering when FPS is very low to maintain simulation speed
+        this.renderFrameCounter++;
+        let shouldRender = true;
 
-        // Render effects less frequently for performance
-        if (this.frameCount % 3 === 0) {
-            this.renderer.renderEffects();
+        if (this.enableFrameSkipping) {
+            if (this.fps < 15) {
+                // Very low FPS - skip every other frame
+                shouldRender = (this.renderFrameCounter % 2 === 0);
+            } else if (this.fps < 25) {
+                // Low FPS - skip every 3rd frame
+                shouldRender = (this.renderFrameCounter % 3 !== 0);
+            }
+            // Above 25 FPS - render every frame
+        }
+
+        // Render (only if not skipped)
+        if (shouldRender) {
+            this.renderer.render(
+                this.particles,
+                this.camera,
+                this.physics.cosmology.currentEpoch,
+                {
+                    showGrid: this.showGrid,
+                    showVelocities: this.showVelocities,
+                    tracers: this.tracers,
+                    clusters: null,
+                    currentFPS: this.fps
+                }
+            );
+
+            // Render effects less frequently for performance
+            if (this.frameCount % 3 === 0) {
+                this.renderer.renderEffects();
+            }
         }
 
         // Update UI (throttled)
@@ -569,12 +682,15 @@ export class Simulator {
     }
 
     /**
-     * Handle timeline click
+     * Handle timeline scrubbing (click or drag)
      */
-    handleTimelineClick(e) {
-        const rect = e.target.getBoundingClientRect();
+    handleTimelineScrub(e) {
+        const timelineBar = document.getElementById('timeline-bar');
+        if (!timelineBar) return;
+
+        const rect = timelineBar.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        const progress = x / rect.width;
+        const progress = Math.max(0, Math.min(1, x / rect.width));
 
         const futureTime = this.presentTime * 10;
         this.physics.cosmology.jumpToTime(progress * futureTime);

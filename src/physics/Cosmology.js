@@ -8,7 +8,8 @@
 
 import { COSMOLOGICAL, UNITS, PLANCK } from '../utils/constants.js';
 import { DEFAULT_COSMOLOGY } from '../utils/constants.js';
-import { EPOCHS, getEpochAtTime } from '../data/epochs.js';
+import { DETAILED_EPOCHS, getEpochAtTime, getNextEpoch } from '../data/detailedEpochs.js';
+import { EPOCHS } from '../data/epochs.js'; // Keep for backwards compatibility
 
 export class Cosmology {
     constructor(params = {}) {
@@ -29,7 +30,9 @@ export class Cosmology {
         this.scaleFactor = 1e-30;
         this.redshift = Infinity;
         this.temperature = PLANCK.temperature;
-        this.currentEpoch = EPOCHS[0];
+        this.currentEpoch = DETAILED_EPOCHS[0];
+        this.nextEpoch = DETAILED_EPOCHS[1];
+        this.epochProgress = 0; // 0-1 interpolation within current epoch
 
         // History for graphs
         this.scaleHistory = new Array(100).fill(0);
@@ -61,6 +64,12 @@ export class Cosmology {
      * @returns {number} Hubble parameter in km/s/Mpc
      */
     hubbleParameter(z) {
+        // Safety check: clamp extreme redshifts
+        if (!isFinite(z) || z > 1e10) {
+            // For extremely early universe, use radiation-dominated approximation
+            return this.H0 * Math.sqrt(this.Omega_r) * 1e10; // Approximate constant at very early times
+        }
+
         const z1 = 1 + z;
         const z1_3 = z1 * z1 * z1;
         const z1_4 = z1_3 * z1;
@@ -69,12 +78,21 @@ export class Cosmology {
         // Dark energy contribution with equation of state w
         const darkEnergyTerm = this.Omega_Lambda * Math.pow(z1, 3 * (1 + this.w));
 
+        // Safety check: ensure all terms are finite
+        if (!isFinite(z1_3) || !isFinite(z1_4) || !isFinite(darkEnergyTerm)) {
+            // Fallback to radiation-dominated for numerical overflow
+            return this.H0 * Math.sqrt(this.Omega_r) * 1e8;
+        }
+
         const E2 = this.Omega_m * z1_3 +
                    this.Omega_r * z1_4 +
                    this.Omega_k * z1_2 +
                    darkEnergyTerm;
 
-        return this.H0 * Math.sqrt(Math.max(0, E2));
+        const result = this.H0 * Math.sqrt(Math.max(0, E2));
+
+        // Final safety check
+        return isFinite(result) ? result : this.H0 * 100; // Fallback value
     }
 
     /**
@@ -95,27 +113,32 @@ export class Cosmology {
     getScaleFactor(time) {
         if (time <= 0) return 1e-30;
 
-        // Inflation era: exponential expansion
+        // Inflation era: exponential expansion (FIXED: reduced exponent to prevent extreme values)
         if (time < 1e-32) {
-            // Extremely rapid expansion during inflation
-            return Math.exp(time * 1e35) * 1e-30;
+            // Smoother expansion during inflation: a(t) = a_init * exp(H_inf * t)
+            // Using H_inf ~ 1e36 for realistic inflation
+            const H_inf = 5e33;  // Reduced from 1e35 to prevent oscillation
+            const expansionFactor = Math.min(1e6, Math.exp(time * H_inf));  // Cap at 1 million
+            return expansionFactor * 1e-30;
         }
 
         // Radiation-dominated era: a ∝ t^(1/2)
         if (time < 4.7e10) {  // ~1500 years (recombination)
-            return Math.pow(time / this.t0, 0.5) * 1e-3;
+            // Ensure smooth transition from inflation
+            const a_inflation_end = Math.exp(1e-32 * 5e33) * 1e-30;
+            return Math.max(a_inflation_end, Math.pow(time / this.t0, 0.5) * 1e-3);
         }
 
         // Matter-dominated era: a ∝ t^(2/3)
         if (time < this.t0 * 0.7) {  // Before dark energy dominance
-            return Math.pow(time / this.t0, 2/3);
+            return Math.max(1e-3, Math.pow(time / this.t0, 2/3));
         }
 
         // Dark energy-dominated era: exponential expansion
         const H = COSMOLOGICAL.H0_SI;
         const t_transition = this.t0 * 0.7;
         const a_transition = Math.pow(0.7, 2/3);
-        return Math.exp(H * (time - t_transition)) * a_transition;
+        return Math.max(a_transition, Math.exp(H * (time - t_transition)) * a_transition);
     }
 
     /**
@@ -124,9 +147,12 @@ export class Cosmology {
     getRedshift(time) {
         const a = this.getScaleFactor(time);
         if (a > 1e-20) {
-            return (1 / a) - 1;
+            const z = (1 / a) - 1;
+            // Clamp to maximum realistic redshift (z~1e6 for earliest observable universe)
+            return Math.min(z, 1e6);
         }
-        return 1e30;
+        // For extremely early universe, return maximum redshift
+        return 1e6;
     }
 
     /**
@@ -230,10 +256,27 @@ export class Cosmology {
         // Update temperature
         this.temperature = this.getTemperature(this.time);
 
-        // Update epoch
+        // Update epochs with progress tracking
         const newEpoch = getEpochAtTime(this.time);
         const epochChanged = this.currentEpoch !== newEpoch;
-        this.currentEpoch = newEpoch;
+
+        if (epochChanged) {
+            this.currentEpoch = newEpoch;
+            // Update next epoch
+            const epochIndex = DETAILED_EPOCHS.indexOf(newEpoch);
+            this.nextEpoch = DETAILED_EPOCHS[Math.min(epochIndex + 1, DETAILED_EPOCHS.length - 1)];
+        }
+
+        // Calculate progress within current epoch (0 = start, 1 = end)
+        const epochDuration = this.currentEpoch.timeEnd - this.currentEpoch.timeStart;
+        if (epochDuration > 0) {
+            this.epochProgress = Math.max(0, Math.min(1,
+                (this.time - this.currentEpoch.timeStart) / epochDuration
+            ));
+        } else {
+            // Instantaneous epoch (like present day)
+            this.epochProgress = 0;
+        }
 
         // Update history for graphs
         this.scaleHistory.push(Math.log10(Math.max(1e-30, this.scaleFactor)));
@@ -247,6 +290,8 @@ export class Cosmology {
             redshift: this.redshift,
             temperature: this.temperature,
             epoch: this.currentEpoch,
+            nextEpoch: this.nextEpoch,
+            epochProgress: this.epochProgress,
             epochChanged
         };
     }
@@ -293,7 +338,9 @@ export class Cosmology {
         this.scaleFactor = 1e-30;
         this.redshift = Infinity;
         this.temperature = PLANCK.temperature;
-        this.currentEpoch = EPOCHS[0];
+        this.currentEpoch = DETAILED_EPOCHS[0];
+        this.nextEpoch = DETAILED_EPOCHS[1];
+        this.epochProgress = 0;
         this.scaleHistory.fill(0);
         this.tempHistory.fill(0);
     }
@@ -302,8 +349,8 @@ export class Cosmology {
      * Jump to specific epoch
      */
     jumpToEpoch(epochIndex) {
-        if (epochIndex >= 0 && epochIndex < EPOCHS.length) {
-            this.time = EPOCHS[epochIndex].timeStart;
+        if (epochIndex >= 0 && epochIndex < DETAILED_EPOCHS.length) {
+            this.time = DETAILED_EPOCHS[epochIndex].timeStart;
             this.update(0);
         }
     }

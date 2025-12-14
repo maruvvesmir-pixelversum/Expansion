@@ -148,17 +148,29 @@ export class Camera {
         const y1 = worldY * this.cosRotX - z1 * this.sinRotX;
         const z2 = worldY * this.sinRotX + z1 * this.cosRotX;
 
-        // Perspective projection
-        const perspective = 500 / (500 + z2 + this.z);
+        // Enhanced perspective projection for better 3D depth perception
+        // Using shorter focal length for more dramatic perspective
+        const focalLength = 300;  // Reduced from 500 for stronger perspective
+        const depth = z2 + this.z;
+        const perspective = focalLength / (focalLength + depth);
 
         // Apply zoom and offset
         const screenX = this.centerX + this.x + x1 * this.zoom * perspective;
         const screenY = this.centerY + this.y + y1 * this.zoom * perspective;
 
+        // Calculate depth factor for fog/fading (0 = far, 1 = near)
+        // Adjusted for camera Z position to make depth more apparent
+        const maxDepth = 800;
+        const minDepth = -200;
+        const normalizedDepth = (depth - minDepth) / (maxDepth - minDepth);
+        const depthFactor = Math.max(0, Math.min(1, 1 - normalizedDepth));
+
         return {
             x: screenX,
             y: screenY,
             z: z2,
+            depth: depth,
+            depthFactor: depthFactor,
             perspective: perspective,
             visible: screenX >= -50 && screenX <= this.width + 50 &&
                      screenY >= -50 && screenY <= this.height + 50 &&
@@ -204,7 +216,7 @@ export class Camera {
     }
 
     /**
-     * Pan camera
+     * Pan camera (XY movement)
      */
     pan(dx, dy) {
         this.x += dx;
@@ -212,15 +224,40 @@ export class Camera {
     }
 
     /**
-     * Rotate camera
+     * Move camera in 3D space (with Z-axis support)
+     */
+    move(dx, dy, dz) {
+        this.x += dx;
+        this.y += dy;
+        this.z += dz;
+    }
+
+    /**
+     * Move camera forward/backward along view direction
+     */
+    moveForward(distance) {
+        // Move along Z-axis (simplified - true 3D would use rotation)
+        this.z += distance;
+    }
+
+    /**
+     * Rotate camera (XY rotation)
      */
     rotate(dx, dy) {
         this.rotationY += dx;
         this.rotationX += dy;
 
-        // Clamp vertical rotation
+        // Clamp vertical rotation to prevent gimbal lock
         this.rotationX = clamp(this.rotationX, -Math.PI / 2, Math.PI / 2);
 
+        this.needsUpdate = true;
+    }
+
+    /**
+     * Rotate camera around Z-axis (roll)
+     */
+    roll(dz) {
+        this.rotationZ += dz;
         this.needsUpdate = true;
     }
 

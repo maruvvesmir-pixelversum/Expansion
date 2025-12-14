@@ -80,7 +80,22 @@ export class ParticleSystem {
 
             // Flags
             active: new Uint8Array(n),
-            visible: new Uint8Array(n)
+            visible: new Uint8Array(n),
+
+            // ========== NEW: Galaxy Properties ==========
+            galaxyName: new Array(n).fill(''),
+            galaxyType: new Uint8Array(n),          // 0=spiral, 1=elliptical, 2=irregular, 3=dwarf
+            galaxyMass: new Float32Array(n),        // Stellar mass (M☉)
+            galaxyRadius: new Float32Array(n),      // Effective radius (kpc)
+            galaxySFR: new Float32Array(n),         // Star formation rate (M☉/yr)
+            galaxyMetallicity: new Float32Array(n), // Metallicity (Z/Z☉)
+            galaxyAge: new Float32Array(n),         // Age since formation (Gyr)
+            mergedWith: new Int32Array(n).fill(-1), // -1 if active, else index merged into
+
+            // ========== NEW: Visual Evolution Properties ==========
+            blur: new Float32Array(n).fill(1.0),    // Current blur amount (0-1)
+            jitter: new Float32Array(n).fill(1.0),  // Random motion amount (0-1)
+            baseSize: new Float32Array(n).fill(1.0) // Base size before scaling
         };
 
         await this.generateInitialConditions();
@@ -93,9 +108,9 @@ export class ParticleSystem {
         const {
             distribution = 'singularity',  // START FROM BIG BANG SINGULARITY
             radius = 0.1,  // Very small initial radius (singularity)
-            perturbationAmplitude = SIMULATION.perturbationAmplitude,
+            perturbationAmplitude = SIMULATION.perturbationAmplitude * 100,  // 100x STRONGER perturbations to break symmetry!
             hubbleVelocity = 0.001,
-            thermalVelocity = 0.1
+            thermalVelocity = 0.5  // Increased thermal velocity for more randomness
         } = config;
 
         const n = this.count;
@@ -106,7 +121,8 @@ export class ParticleSystem {
             let pos;
             if (distribution === 'singularity') {
                 // All particles start very close together (Planck epoch)
-                const r = radius * Math.cbrt(Math.random());
+                // Add randomness to radius to break perfect symmetry
+                const r = radius * Math.cbrt(Math.random()) * (0.5 + Math.random() * 1.5);
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
                 pos = new Vec3(
@@ -118,27 +134,72 @@ export class ParticleSystem {
                 pos = this.generateSphericalPosition(radius);
             }
 
-            // Tiny primordial quantum fluctuations
-            pos.x += (Math.random() - 0.5) * perturbationAmplitude * 0.01;
-            pos.y += (Math.random() - 0.5) * perturbationAmplitude * 0.01;
-            pos.z += (Math.random() - 0.5) * perturbationAmplitude * 0.01;
+            // STRONG primordial quantum fluctuations - break all symmetry!
+            // Use MULTIPLE layers of randomization to destroy any grid patterns
+
+            // Layer 1: Uniform random
+            const perturbX1 = (Math.random() - 0.5) * perturbationAmplitude;
+            const perturbY1 = (Math.random() - 0.5) * perturbationAmplitude;
+            const perturbZ1 = (Math.random() - 0.5) * perturbationAmplitude;
+
+            // Layer 2: Gaussian noise
+            const gaussianNoise = () => {
+                let u = 0, v = 0;
+                while(u === 0) u = Math.random();
+                while(v === 0) v = Math.random();
+                return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+            };
+
+            const perturbX2 = gaussianNoise() * perturbationAmplitude * 0.5;
+            const perturbY2 = gaussianNoise() * perturbationAmplitude * 0.5;
+            const perturbZ2 = gaussianNoise() * perturbationAmplitude * 0.5;
+
+            // Layer 3: Random angle rotation to break octree octant alignment
+            const rotAngle = Math.random() * Math.PI * 2;
+            const rotCos = Math.cos(rotAngle);
+            const rotSin = Math.sin(rotAngle);
+
+            pos.x += perturbX1 + perturbX2;
+            pos.y += perturbY1 + perturbY2;
+            pos.z += perturbZ1 + perturbZ2;
+
+            // Rotate to break octant alignment
+            const tempX = pos.x;
+            pos.x = pos.x * rotCos - pos.y * rotSin;
+            pos.y = tempX * rotSin + pos.y * rotCos;
 
             p.x[i] = pos.x;
             p.y[i] = pos.y;
             p.z[i] = pos.z;
 
-            // Initial velocities: Radial expansion (Big Bang!) + thermal motion
-            const radialSpeed = 0.5;  // Initial expansion velocity
+            // Initial velocities: PURE RADIAL EXPANSION - all particles expand at same speed!
+            // This creates a perfect spherical expansion from the Big Bang
             const distance = Math.sqrt(pos.x**2 + pos.y**2 + pos.z**2);
-            const normalizedDir = distance > 0 ? {
-                x: pos.x / distance,
-                y: pos.y / distance,
-                z: pos.z / distance
-            } : { x: 0, y: 0, z: 0 };
 
-            p.vx[i] = normalizedDir.x * radialSpeed + (Math.random() - 0.5) * thermalVelocity * 0.1;
-            p.vy[i] = normalizedDir.y * radialSpeed + (Math.random() - 0.5) * thermalVelocity * 0.1;
-            p.vz[i] = normalizedDir.z * radialSpeed + (Math.random() - 0.5) * thermalVelocity * 0.1;
+            if (distance > 1e-10) {
+                // Normalize direction
+                const invDist = 1.0 / distance;
+                const dirX = pos.x * invDist;
+                const dirY = pos.y * invDist;
+                const dirZ = pos.z * invDist;
+
+                // UNIFORM radial expansion speed - same for ALL particles
+                const radialSpeed = 1.0;
+
+                // TINY random perturbation (< 1%) to prevent exact symmetry
+                const perturbFactor = 1.0 + (Math.random() - 0.5) * 0.01;
+
+                p.vx[i] = dirX * radialSpeed * perturbFactor;
+                p.vy[i] = dirY * radialSpeed * perturbFactor;
+                p.vz[i] = dirZ * radialSpeed * perturbFactor;
+            } else {
+                // For particles exactly at origin, give random direction
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                p.vx[i] = Math.sin(phi) * Math.cos(theta);
+                p.vy[i] = Math.sin(phi) * Math.sin(theta);
+                p.vz[i] = Math.cos(phi);
+            }
 
             // Mass: power-law distribution (Schechter-like)
             p.mass[i] = 1e10 * Math.pow(Math.random() + 0.1, -2.3);
@@ -168,6 +229,12 @@ export class ParticleSystem {
             // All particles active and visible initially
             p.active[i] = 1;
             p.visible[i] = 1;
+
+            // INITIALIZE VISUAL EVOLUTION PROPERTIES
+            // Start with MAXIMUM blur, jitter, and size for early universe (superheated!)
+            p.blur[i] = 3.0;  // Maximum blur - matches Planck epoch
+            p.jitter[i] = 2.0;  // Maximum jitter
+            p.baseSize[i] = 100.0;  // Very large - superheated appearance
         }
 
         // Calculate initial statistics
@@ -490,6 +557,180 @@ export class ParticleSystem {
             clusteredPercent: (this.clusteredParticleCount / this.count) * 100,
             ...this.stats
         };
+    }
+
+    /**
+     * Initialize galaxy properties for a particle
+     * Called when particle transitions to galaxy state
+     */
+    initializeGalaxy(index, nameGenerator = null) {
+        const p = this.particles;
+
+        // Generate name (will be set by name generator if provided)
+        if (nameGenerator) {
+            p.galaxyName[index] = nameGenerator.generate(index, p.mass[index], p.x[index], p.y[index], p.z[index]);
+        } else {
+            // Default catalog naming
+            p.galaxyName[index] = 'GAL-' + String(index).padStart(6, '0');
+        }
+
+        // Determine galaxy type based on mass and environment
+        p.galaxyType[index] = this.determineGalaxyType(p.mass[index]);
+
+        // Set galaxy properties
+        p.galaxyMass[index] = p.mass[index] * 1e9; // Convert to solar masses (approximate)
+        p.galaxyRadius[index] = this.calculateGalaxyRadius(p.galaxyMass[index], p.galaxyType[index]);
+        p.galaxySFR[index] = this.calculateSFR(p.galaxyMass[index], p.temperature[index]);
+        p.galaxyMetallicity[index] = 0.02; // Solar metallicity (Z☉)
+        p.galaxyAge[index] = 0; // Just formed
+
+        // Reset visual evolution (sharp galaxy)
+        p.blur[index] = 0.0;
+        p.jitter[index] = 0.0;
+        p.baseSize[index] = 1.0;
+    }
+
+    /**
+     * Determine galaxy type based on mass
+     * Distribution: ~70% spiral, ~20% elliptical, ~7% irregular, ~3% dwarf
+     */
+    determineGalaxyType(mass) {
+        const random = Math.random();
+
+        // Mass-dependent type selection
+        if (mass > 5e10) {
+            // Massive galaxies: more likely elliptical
+            if (random < 0.4) return 1; // Elliptical
+            if (random < 0.85) return 0; // Spiral
+            return 2; // Irregular
+        } else if (mass > 1e10) {
+            // Medium mass: mostly spirals
+            if (random < 0.75) return 0; // Spiral
+            if (random < 0.9) return 1; // Elliptical
+            return 2; // Irregular
+        } else {
+            // Low mass: dwarfs and irregulars
+            if (random < 0.5) return 3; // Dwarf
+            if (random < 0.8) return 2; // Irregular
+            return 0; // Spiral
+        }
+    }
+
+    /**
+     * Calculate galaxy radius based on mass and type
+     * Returns radius in kpc
+     */
+    calculateGalaxyRadius(mass, type) {
+        // Empirical size-mass relation
+        // R ~ M^0.14 for disks (Shen et al. 2003)
+        const baseSizeKpc = Math.pow(mass / 1e10, 0.14) * 5.0; // kpc
+
+        // Type-dependent size modifier
+        const typeModifier = [
+            1.0,   // Spiral: normal size
+            0.7,   // Elliptical: more compact
+            1.3,   // Irregular: more extended
+            0.3    // Dwarf: very small
+        ];
+
+        return baseSizeKpc * typeModifier[type];
+    }
+
+    /**
+     * Calculate star formation rate based on mass and temperature
+     * Returns SFR in M☉/yr
+     */
+    calculateSFR(mass, temperature) {
+        // Higher mass → higher SFR (roughly linear)
+        // Higher temperature → higher SFR (star-forming regions are hot)
+        const massFactor = mass / 1e10; // Normalize to 10^10 M☉
+        const tempFactor = Math.min(temperature / 10000, 1.0); // Normalize, cap at 1
+
+        // Typical SFR: 0.1 - 100 M☉/yr
+        const sfr = massFactor * tempFactor * (0.5 + Math.random() * 1.5);
+
+        return Math.max(0.01, Math.min(sfr, 1000)); // Clamp to reasonable range
+    }
+
+    /**
+     * Merge two galaxies
+     * Combines properties using mass-weighted averages
+     */
+    mergeGalaxies(index1, index2) {
+        const p = this.particles;
+
+        if (!p.active[index1] || !p.active[index2]) {
+            console.warn('Cannot merge inactive particles');
+            return false;
+        }
+
+        const totalMass = p.mass[index1] + p.mass[index2];
+        const totalGalaxyMass = p.galaxyMass[index1] + p.galaxyMass[index2];
+
+        // Mass-weighted average position
+        p.x[index1] = (p.x[index1] * p.mass[index1] + p.x[index2] * p.mass[index2]) / totalMass;
+        p.y[index1] = (p.y[index1] * p.mass[index1] + p.y[index2] * p.mass[index2]) / totalMass;
+        p.z[index1] = (p.z[index1] * p.mass[index1] + p.z[index2] * p.mass[index2]) / totalMass;
+
+        // Mass-weighted average velocity
+        p.vx[index1] = (p.vx[index1] * p.mass[index1] + p.vx[index2] * p.mass[index2]) / totalMass;
+        p.vy[index1] = (p.vy[index1] * p.mass[index1] + p.vy[index2] * p.mass[index2]) / totalMass;
+        p.vz[index1] = (p.vz[index1] * p.mass[index1] + p.vz[index2] * p.mass[index2]) / totalMass;
+
+        // Combined mass
+        p.mass[index1] = totalMass;
+        p.galaxyMass[index1] = totalGalaxyMass;
+
+        // Merger properties
+        // Major mergers (mass ratio < 4:1) → elliptical
+        // Minor mergers → retain primary type
+        const massRatio = Math.max(p.galaxyMass[index1], p.galaxyMass[index2]) /
+                          Math.min(p.galaxyMass[index1], p.galaxyMass[index2]);
+
+        if (massRatio < 4.0) {
+            // Major merger → elliptical
+            p.galaxyType[index1] = 1; // Elliptical
+        }
+        // else: minor merger, retain type of more massive galaxy
+
+        // Combined star formation (merger triggers starburst)
+        p.galaxySFR[index1] = p.galaxySFR[index1] + p.galaxySFR[index2] * 2.0; // Starburst factor
+
+        // Mass-weighted metallicity
+        p.galaxyMetallicity[index1] = (p.galaxyMetallicity[index1] * p.galaxyMass[index1] +
+                                       p.galaxyMetallicity[index2] * p.galaxyMass[index2]) / totalGalaxyMass;
+
+        // Age: younger of the two (merger resets age somewhat)
+        p.galaxyAge[index1] = Math.min(p.galaxyAge[index1], p.galaxyAge[index2]);
+
+        // Recalculate radius
+        p.galaxyRadius[index1] = this.calculateGalaxyRadius(p.galaxyMass[index1], p.galaxyType[index1]);
+
+        // Update name (append "merger")
+        p.galaxyName[index1] = p.galaxyName[index1] + '+' + p.galaxyName[index2].split('-').pop();
+
+        // Mark second particle as merged
+        p.active[index2] = 0;
+        p.visible[index2] = 0;
+        p.mergedWith[index2] = index1;
+
+        // Update counts
+        this.activeCount--;
+
+        return true;
+    }
+
+    /**
+     * Bulk initialize all galaxies
+     * Called when entering galaxy formation epoch
+     */
+    initializeAllGalaxies(nameGenerator) {
+        const p = this.particles;
+        for (let i = 0; i < this.count; i++) {
+            if (p.active[i]) {
+                this.initializeGalaxy(i, nameGenerator);
+            }
+        }
     }
 }
 

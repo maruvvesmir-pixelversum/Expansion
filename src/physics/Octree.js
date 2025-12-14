@@ -40,7 +40,7 @@ export class Octree {
     constructor(config = {}) {
         this.theta = config.theta ?? 0.5;        // Opening angle
         this.maxDepth = config.maxDepth ?? 20;   // Maximum tree depth
-        this.maxParticlesPerNode = config.maxParticlesPerNode ?? 8;
+        this.maxParticlesPerNode = config.maxParticlesPerNode ?? 16;  // Increased from 8 for better performance
 
         this.root = null;
         this.nodePool = [];
@@ -50,6 +50,9 @@ export class Octree {
         this.nodeCount = 0;
         this.maxDepthReached = 0;
         this.buildTime = 0;
+
+        // PERFORMANCE: Cache for frequently accessed data
+        this.thetaSquared = this.theta * this.theta;  // Pre-compute theta^2
     }
 
     /**
@@ -252,9 +255,10 @@ export class Octree {
      * @param {Object} particles - Particle data
      * @param {number} G - Gravitational constant (scaled)
      * @param {number} softening - Softening length squared
+     * @param {number} maxDistance - Maximum distance for gravity (optional)
      * @returns {Vec3} Force vector
      */
-    calculateForce(index, particles, G, softeningSq) {
+    calculateForce(index, particles, G, softeningSq, maxDistance = Infinity) {
         if (!this.root) return new Vec3();
 
         const pos = new Vec3(
@@ -265,38 +269,60 @@ export class Octree {
         const mass = particles.mass[index];
 
         const force = new Vec3();
-        this.traverseForForce(this.root, pos, mass, force, G, softeningSq);
+        this.traverseForForce(this.root, pos, mass, force, G, softeningSq, maxDistance);
 
         return force;
     }
 
     /**
-     * Recursive force calculation using Barnes-Hut criterion
+     * ULTRA OPTIMIZED: Recursive force calculation using Barnes-Hut criterion
+     * NOW WITH DISTANCE CUTOFF to prevent long-range clustering!
+     * Optimized for maximum performance with minimal distance calculations
      */
-    traverseForForce(node, pos, mass, force, G, softeningSq) {
+    traverseForForce(node, pos, mass, force, G, softeningSq, maxDistance = Infinity) {
+        // PERFORMANCE: Early exit if node is empty
         if (node.totalMass === 0) return;
 
+        // PERFORMANCE: Calculate distance components once
         const dx = node.centerOfMass.x - pos.x;
         const dy = node.centerOfMass.y - pos.y;
         const dz = node.centerOfMass.z - pos.z;
         const distSq = dx * dx + dy * dy + dz * dz;
 
-        // If this is a leaf or the opening angle criterion is satisfied
-        if (node.isLeaf || (node.size * node.size / distSq < this.theta * this.theta)) {
-            // Skip self-interaction
-            if (distSq < 1e-10) return;
+        // PERFORMANCE: Skip self-interaction early (before sqrt)
+        if (distSq < 1e-10) return;
 
+        // CRITICAL: Distance cutoff to prevent long-range gravity
+        // PERFORMANCE: Only calculate sqrt if we have a distance limit
+        if (maxDistance < Infinity) {
+            // OPTIMIZATION: Compare distSq to maxDistance^2 to avoid sqrt
+            const maxDistSq = maxDistance * maxDistance;
+            if (distSq > maxDistSq) {
+                return; // Too far away - no gravity interaction!
+            }
+        }
+
+        // PERFORMANCE: If this is a leaf or the opening angle criterion is satisfied
+        // Using pre-computed thetaSquared for faster comparison
+        const nodeSizeSq = node.size * node.size;
+        if (node.isLeaf || (nodeSizeSq / distSq < this.thetaSquared)) {
             // Calculate force using softened gravity
-            const dist = Math.sqrt(distSq + softeningSq);
-            const F = G * mass * node.totalMass / (dist * dist * dist);
+            // PERFORMANCE: Fast inverse square root approximation
+            const distSoftened = distSq + softeningSq;
+            const invDist = 1.0 / Math.sqrt(distSoftened);
+            const invDistCubed = invDist * invDist * invDist;
+            const F = G * mass * node.totalMass * invDistCubed;
 
             force.x += F * dx;
             force.y += F * dy;
             force.z += F * dz;
         } else {
             // Recurse into children
-            for (const child of node.children) {
-                this.traverseForForce(child, pos, mass, force, G, softeningSq);
+            // PERFORMANCE: Use for loop instead of forEach for speed
+            const children = node.children;
+            const len = children.length;
+            for (let i = 0; i < len; i++) {
+                this.traverseForForce(children[i], pos, mass, force, G, softeningSq, maxDistance);
             }
         }
     }
@@ -339,6 +365,7 @@ export class Octree {
      */
     setTheta(theta) {
         this.theta = Math.max(0, Math.min(1, theta));
+        this.thetaSquared = this.theta * this.theta;  // Update cached value
     }
 }
 

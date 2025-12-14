@@ -297,6 +297,7 @@
             position: relative;
             margin: 8px 0;
             cursor: pointer;
+            user-select: none;
         }
 
         #timeline-progress {
@@ -328,18 +329,54 @@
         .epoch-marker {
             position: absolute;
             top: 0;
-            width: 1px;
+            width: 2px;
             height: 100%;
-            background: #333;
+            background: #555;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .epoch-marker:hover {
+            background: #888;
+            width: 3px;
         }
 
         .epoch-marker-label {
             position: absolute;
-            top: -12px;
-            font-size: 7px;
-            color: #444;
+            top: -14px;
+            font-size: 8px;
+            color: #666;
             transform: translateX(-50%);
             white-space: nowrap;
+            pointer-events: none;
+            text-shadow: 0 0 2px #000;
+        }
+
+        .epoch-marker:hover .epoch-marker-label {
+            color: #aaa;
+            font-weight: bold;
+        }
+
+        /* Control buttons (zoom, etc) */
+        .control-btn {
+            background: #222;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 14px;
+            min-width: 28px;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #333;
+            border-color: #666;
+            color: #fff;
+        }
+
+        .control-btn:active {
+            background: #111;
         }
 
         #time-controls {
@@ -1377,6 +1414,18 @@
                         <div class="data-row">
                             <span class="data-label">ZOOM:</span>
                             <span class="data-value" id="camera-zoom">1.00x</span>
+                        </div>
+                        <div class="data-row" style="margin-top: 8px;">
+                            <div style="display: flex; gap: 4px; align-items: center; width: 100%;">
+                                <button class="control-btn" id="zoom-out-btn" title="Zoom Out (-)">−</button>
+                                <input type="range" id="zoom-slider" min="-40" max="40" value="7" step="0.1"
+                                       style="flex: 1; height: 20px;" title="Zoom Control">
+                                <button class="control-btn" id="zoom-in-btn" title="Zoom In (+)">+</button>
+                                <button class="control-btn" id="zoom-reset-btn" title="Reset Zoom (0)">↺</button>
+                            </div>
+                            <div style="font-size: 8px; color: #666; margin-top: 2px; text-align: center;">
+                                0.0001x ← → 10000x
+                            </div>
                         </div>
                         <div class="data-row">
                             <span class="data-label">ROTATION:</span>

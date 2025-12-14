@@ -9,23 +9,39 @@ import { SIMULATION } from '../utils/constants.js';
 import { Octree } from './Octree.js';
 import { Cosmology } from './Cosmology.js';
 import { ClusterDetector } from './ClusterDetector.js';
+import { SpatialHash } from './SpatialHash.js';
+import { TemporalPhysics } from './TemporalPhysics.js';
 
 export class PhysicsEngine {
     constructor(config = {}) {
-        // Physics parameters
-        this.G = config.G ?? 0.0001;  // Scaled gravitational constant
+        // Physics parameters - DISABLED GRAVITY for early universe
+        this.G = config.G ?? 0.0000000001;  // 100x weaker! Almost no gravity!
+        this.maxGravityDistance = config.maxGravityDistance ?? 0.5;  // EXTREMELY short range - only touching particles
         this.softening = config.softening ?? SIMULATION.softeningLength;
         this.theta = config.theta ?? SIMULATION.barnesHutTheta;
 
         // Integration settings
         this.integrationMethod = config.integrationMethod ?? 'verlet';
         this.useBarnesHut = config.useBarnesHut ?? true;
-        this.useGridGravity = config.useGridGravity ?? true;  // Fallback for performance
+        this.useGridGravity = config.useGridGravity ?? false;  // DISABLED - grid gravity creates 4-point clustering artifacts!
+
+        // PERFORMANCE: Adaptive physics update intervals
+        this.gravityUpdateInterval = config.gravityUpdateInterval ?? 5;  // Update every 5 frames
+        this.gravityFrameCounter = 0;
+        this.adaptivePhysics = true;  // Enable adaptive physics for 60 FPS
+        this.targetFPS = 60;
+        this.currentFPS = 60;
+        this.physicsQuality = 1.0;  // 1.0 = full quality, lower = faster but less accurate
 
         // Create components
         this.octree = new Octree({ theta: this.theta });
         this.cosmology = new Cosmology(config.cosmology);
         this.clusterDetector = new ClusterDetector({ gridSize: 30 });
+
+        // Performance optimization systems for 1M particles
+        this.spatialHash = new SpatialHash(10.0);  // O(N) neighbor queries
+        this.temporalPhysics = new TemporalPhysics();  // Temporal updates
+        this.useOptimizations = config.useOptimizations ?? true;
 
         // Grid-based gravity (faster, less accurate)
         this.gravityGrid = null;
@@ -53,10 +69,24 @@ export class PhysicsEngine {
     }
 
     /**
-     * Main physics update
+     * Main physics update with ADAPTIVE PERFORMANCE
      */
-    update(particles, dt, timeSpeed, isReversed = false) {
+    update(particles, dt, timeSpeed, isReversed = false, currentFPS = 60) {
         const physicsStart = performance.now();
+
+        // PERFORMANCE: Adaptive quality based on FPS
+        if (this.adaptivePhysics) {
+            this.currentFPS = currentFPS;
+            if (currentFPS < 45) {
+                // Dropping below 45 FPS - reduce quality
+                this.physicsQuality = Math.max(0.5, this.physicsQuality - 0.05);
+                this.gravityUpdateInterval = Math.min(15, this.gravityUpdateInterval + 1);  // Max 15 frames between updates
+            } else if (currentFPS > 55 && this.physicsQuality < 1.0) {
+                // Above 55 FPS - increase quality back up
+                this.physicsQuality = Math.min(1.0, this.physicsQuality + 0.02);
+                this.gravityUpdateInterval = Math.max(5, this.gravityUpdateInterval - 1);  // Minimum 5 frames
+            }
+        }
 
         const scaledDt = dt * timeSpeed * (isReversed ? -1 : 1);
 
@@ -70,34 +100,75 @@ export class PhysicsEngine {
             this.applyExpansion(particles, scaledDt / timeSpeed);
             this.expansionTime = performance.now() - expansionStart;
 
-            // Apply gravity after matter-radiation equality (~50,000 years)
-            if (this.cosmology.time > 1.5e12) {
+            // DISABLE gravity for early universe to prevent clustering!
+            // Only enable after 1 billion years to allow pure spherical expansion
+            const gravityStartTime = 3.156e16; // 1 billion years in seconds
+
+            if (this.cosmology.time > gravityStartTime) {
                 const gravityStart = performance.now();
 
-                // Use grid gravity for better performance with many particles
-                if (particles.count <= 5000 && this.useBarnesHut) {
-                    this.applyBarnesHutGravity(particles, scaledDt / timeSpeed);
-                } else {
-                    this.applyGridGravity(particles, scaledDt / timeSpeed);
+                // Gradually ramp up gravity over 1 billion years
+                const rampUpDuration = 3.156e16; // 1 billion years
+                const timeSinceStart = this.cosmology.time - gravityStartTime;
+                const gravityFactor = Math.min(1.0, timeSinceStart / rampUpDuration);
+
+                // Only apply gravity if factor is significant
+                if (gravityFactor > 0.01) {
+                    // OPTIMIZATION: Update gravity every N frames for better performance
+                    this.gravityFrameCounter++;
+                    const shouldUpdateGravity = (this.gravityFrameCounter % this.gravityUpdateInterval === 0);
+
+                    if (shouldUpdateGravity) {
+                        // Debug logging for gravity activation (log every 100 frames)
+                        if (!this._gravityFrameCount) this._gravityFrameCount = 0;
+                        this._gravityFrameCount++;
+                        if (this._gravityFrameCount % 100 === 0) {
+                            const ageYears = (this.cosmology.time / 3.156e7).toFixed(0);
+                            console.log(`⚡ GRAVITY: age=${ageYears}yr, factor=${(gravityFactor*100).toFixed(1)}%, maxDist=${this.maxGravityDistance}`);
+                        }
+
+                        // Temporarily scale G for ramp-up
+                        const originalG = this.G;
+                        this.G = originalG * gravityFactor;
+
+                        // CRITICAL: Use Barnes-Hut with distance cutoff to prevent 4-point clustering
+                        // Grid gravity is DISABLED because it creates symmetrical artifacts
+                        this.applyBarnesHutGravity(particles, scaledDt / timeSpeed * this.gravityUpdateInterval);
+
+                        // Restore original G
+                        this.G = originalG;
+                    }
                 }
 
                 this.gravityTime = performance.now() - gravityStart;
             }
         }
 
-        // Integrate motion
+        // Integrate motion with very small timestep to prevent jumps
+        // Using smaller factor (0.001 instead of 0.01) for smoother motion
         const integrationStart = performance.now();
-        this.integrateMotion(particles, scaledDt / timeSpeed * 0.01);
+        this.integrateMotion(particles, scaledDt / timeSpeed * 0.001);
         this.integrationTime = performance.now() - integrationStart;
 
-        // Update particle temperatures
-        this.updateTemperatures(particles, scaledDt);
+        // ULTRA PERFORMANCE: Update temperatures, colors, and ages adaptively
+        // These don't need to be updated every frame for visual quality
+        if (!this._visualUpdateCounter) this._visualUpdateCounter = 0;
+        this._visualUpdateCounter++;
 
-        // Update particle colors
-        particles.updateColors();
+        // Adaptive visual update frequency based on performance
+        const visualUpdateInterval = this.physicsQuality > 0.8 ? 3 : 5;  // 3-5 frames (was too aggressive!)
+        const shouldUpdateVisuals = (this._visualUpdateCounter % visualUpdateInterval === 0);
 
-        // Update particle ages
-        particles.updateAges(scaledDt);
+        if (shouldUpdateVisuals) {
+            // Update particle temperatures
+            this.updateTemperatures(particles, scaledDt * visualUpdateInterval);  // Scale by update interval
+
+            // Update particle colors
+            particles.updateColors();
+
+            // Update particle ages
+            particles.updateAges(scaledDt * visualUpdateInterval);  // Scale by update interval
+        }
 
         this.physicsTime = performance.now() - physicsStart;
 
@@ -111,15 +182,27 @@ export class PhysicsEngine {
      * Apply Hubble expansion to particles
      */
     applyExpansion(particles, dt) {
-        const z = Math.min(this.cosmology.redshift, 1e10);
+        // Clamp redshift to reasonable range (z > 1e6 is extremely early universe)
+        const z = Math.min(this.cosmology.redshift, 1e6);
+
+        // Skip expansion if redshift is too extreme or invalid
+        if (!isFinite(z) || z > 1e6) {
+            return; // Too early in universe, skip expansion
+        }
+
         const H = this.cosmology.hubbleParameter(z);
 
-        // Scale expansion rate for simulation
-        const expansionRate = H * 1e-6;
+        // Safety check: ensure H is valid
+        if (!isFinite(H) || H <= 0) {
+            return; // Invalid Hubble parameter, skip
+        }
+
+        // Scale expansion rate for simulation - MAXIMUM EXPANSION
+        const expansionRate = H * 0.1;  // 100x stronger than original! Universe expands extremely rapidly!
 
         // Clamp expansion to prevent numerical overflow
-        // Maximum 10% expansion/contraction per frame
-        const maxExpansion = 0.1;
+        // Maximum 95% expansion per frame - very aggressive expansion
+        const maxExpansion = 0.95;
         const clampedExpansion = Math.max(-maxExpansion, Math.min(maxExpansion, expansionRate * dt));
 
         const factor = 1 + clampedExpansion;
@@ -127,8 +210,31 @@ export class PhysicsEngine {
 
         // Safety check: ensure factors are finite and reasonable
         if (!isFinite(factor) || !isFinite(velocityFactor) || factor <= 0) {
-            console.warn('Invalid expansion factors, skipping expansion', { factor, velocityFactor, H, z });
-            return;
+            return; // Invalid factors, skip
+        }
+
+        // DEBUG: Log expansion every 200 frames (reduced frequency)
+        if (!this._expansionFrameCount) this._expansionFrameCount = 0;
+        this._expansionFrameCount++;
+        if (this._expansionFrameCount % 200 === 0) {
+            const ageYears = (this.cosmology.time / 3.156e7).toFixed(0);
+            console.log(`🌍 EXPANSION: age=${ageYears}yr, factor=${factor.toFixed(6)}, z=${z.toFixed(1)}`);
+
+            // Debug: Track first 4 particle positions to detect clustering
+            const p = particles.particles;
+            const positions = [];
+            for (let i = 0; i < Math.min(4, n); i++) {
+                positions.push(`[${p.x[i].toFixed(2)}, ${p.y[i].toFixed(2)}, ${p.z[i].toFixed(2)}]`);
+            }
+            console.log(`   First 4 particle positions: ${positions.join(', ')}`);
+
+            // Calculate average distance from origin
+            let avgDist = 0;
+            for (let i = 0; i < Math.min(100, n); i++) {
+                avgDist += Math.sqrt(p.x[i]**2 + p.y[i]**2 + p.z[i]**2);
+            }
+            avgDist /= Math.min(100, n);
+            console.log(`   Average distance from origin: ${avgDist.toFixed(2)}`);
         }
 
         const p = particles.particles;
@@ -149,6 +255,7 @@ export class PhysicsEngine {
 
     /**
      * Apply gravity using Barnes-Hut octree (O(N log N))
+     * WITH DISTANCE CUTOFF - only short-range gravity to prevent clustering!
      */
     applyBarnesHutGravity(particles, dt) {
         const p = particles.particles;
@@ -166,7 +273,9 @@ export class PhysicsEngine {
                 continue;
             }
 
-            const force = this.octree.calculateForce(i, p, this.G, softeningSq);
+            // CRITICAL: Pass maxGravityDistance to enforce short-range gravity only!
+            // This prevents particles from clustering into 4 points
+            const force = this.octree.calculateForce(i, p, this.G, softeningSq, this.maxGravityDistance);
 
             // Safety check: ensure force is finite
             if (!isFinite(force.x) || !isFinite(force.y) || !isFinite(force.z)) {
@@ -278,8 +387,9 @@ export class PhysicsEngine {
             const dy = p.vy[i] * dt;
             const dz = p.vz[i] * dt;
 
-            // Clamp maximum movement per frame
-            const maxMove = 50;
+            // Clamp maximum movement per frame to prevent discontinuities
+            // Reduced from 50 to 10 for smoother motion
+            const maxMove = 10;
             p.x[i] += Math.max(-maxMove, Math.min(maxMove, dx));
             p.y[i] += Math.max(-maxMove, Math.min(maxMove, dy));
             p.z[i] += Math.max(-maxMove, Math.min(maxMove, dz));

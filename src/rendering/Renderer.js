@@ -7,6 +7,7 @@
 
 import { VISUAL } from '../utils/constants.js';
 import { LODSystem } from './LODSystem.js';
+import { EpochRenderer } from './EpochRenderer.js';
 
 export class Renderer {
     constructor(canvasMain, canvasEffects) {
@@ -22,24 +23,27 @@ export class Renderer {
             adaptiveEnabled: true
         });
 
-        // Rendering settings - Optimized for early universe (small) → late universe (large)
-        this.particleSizeMultiplier = 2.5;  // Smaller for better performance
-        this.maxVisibleParticles = 2000;  // Aggressive limit for smooth FPS
+        // Initialize epoch-specific renderer
+        this.epochRenderer = new EpochRenderer();
+
+        // Rendering settings
+        this.particleSizeMultiplier = 6.0;  // Very large for visibility
+        this.maxVisibleParticles = 20000;  // Show lots of particles
         this.renderStride = 1;
 
-        // Visual effects - Minimal for performance
+        // Visual effects
         this.effects = {
-            bloom: false,  // Disable for better performance
-            bloomIntensity: 0,
-            motionBlur: false,
-            motionBlurLength: 0,
-            filmGrain: false,
-            grainIntensity: 0,
-            vignette: false,
-            vignetteIntensity: 0,
-            cosmicWeb: true,  // Enable to see structure formation!
-            cosmicWebDensity: 0.1,
-            useLOD: true  // Critical for performance
+            bloom: true,
+            bloomIntensity: 0.7,
+            motionBlur: true,
+            motionBlurLength: 0.3,
+            filmGrain: true,
+            grainIntensity: 0.1,
+            vignette: true,
+            vignetteIntensity: 0.3,
+            cosmicWeb: false,
+            cosmicWebDensity: 0,
+            useLOD: false  // Disable LOD to show all particles
         };
 
         // Render statistics
@@ -69,7 +73,7 @@ export class Renderer {
     }
 
     /**
-     * Main render function
+     * Main render function - ULTRA OPTIMIZED
      */
     render(particles, camera, epoch, options = {}) {
         const renderStart = performance.now();
@@ -88,28 +92,33 @@ export class Renderer {
             return 0;
         }
 
-        // Debug first render
-        if (!this._firstRenderLogged) {
-            console.log('[RENDER] First render call:', {
-                particleCount: particles.count,
-                canvasSize: { width, height },
-                cameraPos: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom },
-                firstParticle: {
-                    x: particles.particles.x[0],
-                    y: particles.particles.y[0],
-                    z: particles.particles.z[0]
-                }
-            });
-            this._firstRenderLogged = true;
-        }
+        // PERFORMANCE: Enable hardware acceleration hints
+        ctx.imageSmoothingEnabled = false;  // Disable for pixel-perfect rendering (faster)
+
 
         // Update LOD system with current FPS
         if (options.currentFPS && this.effects.useLOD) {
             this.lodSystem.updateAdaptiveQuality(options.currentFPS);
         }
 
-        // Clear canvas
-        ctx.fillStyle = '#000000';
+        // Clear canvas with PITCH BLACK space (empty void)
+        // Space around the universe is completely empty and dark
+        // Only particles emit light against this darkness
+        ctx.fillStyle = 'rgb(0, 0, 0)';  // Pure black - empty space
+        ctx.fillRect(0, 0, width, height);
+
+        // OPTIMIZATION: Cache depth gradient creation
+        if (!this._depthGradient || this._lastWidth !== width || this._lastHeight !== height) {
+            this._depthGradient = ctx.createRadialGradient(
+                width / 2, height / 2, 0,
+                width / 2, height / 2, Math.max(width, height) * 0.8
+            );
+            this._depthGradient.addColorStop(0, 'rgba(5, 5, 10, 0.15)');
+            this._depthGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            this._lastWidth = width;
+            this._lastHeight = height;
+        }
+        ctx.fillStyle = this._depthGradient;
         ctx.fillRect(0, 0, width, height);
 
         // Get epoch effects
@@ -132,20 +141,6 @@ export class Renderer {
         // Sort by depth (back to front)
         this.visibleParticles.sort((a, b) => b.z - a.z);
 
-        // Debug visibility
-        if (!this._visibilityLogged && this.visibleParticles.length === 0) {
-            console.warn('[RENDER] No visible particles!', {
-                totalParticles: particles.count,
-                useLOD: this.effects.useLOD,
-                maxVisible: this.maxVisibleParticles,
-                cameraPos: { x: camera.x, y: camera.y, z: camera.z, zoom: camera.zoom }
-            });
-            this._visibilityLogged = true;
-        } else if (!this._visibilityLogged && this.visibleParticles.length > 0) {
-            console.log('[RENDER] Visible particles:', this.visibleParticles.length, '/', particles.count);
-            console.log('[RENDER] First visible particle:', this.visibleParticles[0]);
-            this._visibilityLogged = true;
-        }
 
         // Draw grid if enabled
         if (options.showGrid) {
@@ -157,9 +152,12 @@ export class Renderer {
             this.drawCosmicWeb(ctx);
         }
 
-        // Render particles
+        // Render particles using epoch-specific renderer
         ctx.globalCompositeOperation = 'lighter';
-        this.renderParticles(ctx, jitter);
+        this.epochRenderer.render(ctx, this.visibleParticles, camera, epoch, {
+            selectedGalaxy: options.selectedGalaxy,
+            frameCount: options.frameCount || 0
+        });
         ctx.globalCompositeOperation = 'source-over';
 
 
@@ -184,77 +182,172 @@ export class Renderer {
     }
 
     /**
-     * Collect visible particles and project to screen space
+     * ULTRA OPTIMIZED: Collect visible particles with frustum culling and batching
+     * Uses aggressive optimizations for 60 FPS with high particle counts
      */
     collectVisibleParticles(particles, camera) {
-        this.visibleParticles = [];
+        this.visibleParticles.length = 0;  // Clear array without reallocating
 
         const p = particles.particles;
         const n = particles.count;
         const stride = this.calculateStride(n);
 
-        let checkedCount = 0;
-        let culledCount = 0;
+        // Pre-compute constants outside loop
+        const minSizeDoubled = VISUAL.particleMinSize * 2;
+        const zoom = camera.zoom;
+        const sizeMultiplier = this.particleSizeMultiplier;
+        const zoomTimesMultiplier = zoom * sizeMultiplier;
 
-        for (let i = 0; i < n; i += stride) {
-            checkedCount++;
-            const projected = camera.project(p.x[i], p.y[i], p.z[i]);
+        // OPTIMIZATION: Frustum culling - calculate view bounds
+        const canvasWidth = this.canvasMain.width;
+        const canvasHeight = this.canvasMain.height;
+        const margin = 100; // Render particles slightly offscreen for smooth transitions
+        const viewLeft = -margin;
+        const viewRight = canvasWidth + margin;
+        const viewTop = -margin;
+        const viewBottom = canvasHeight + margin;
 
-            if (!projected.visible) {
-                culledCount++;
-                continue;
+        // OPTIMIZATION: Process particles in batches for better cache locality
+        const batchSize = 1000;
+        for (let batchStart = 0; batchStart < n; batchStart += batchSize * stride) {
+            const batchEnd = Math.min(batchStart + batchSize * stride, n);
+
+            for (let i = batchStart; i < batchEnd; i += stride) {
+                // OPTIMIZATION: Skip inactive particles immediately
+                if (!p.active[i]) continue;
+
+                const projected = camera.project(p.x[i], p.y[i], p.z[i]);
+
+                if (!projected.visible) continue;
+
+                // OPTIMIZATION: Frustum culling - skip offscreen particles
+                const screenX = projected.x;
+                const screenY = projected.y;
+                if (screenX < viewLeft || screenX > viewRight ||
+                    screenY < viewTop || screenY > viewBottom) {
+                    continue;
+                }
+
+                // ULTRA OPTIMIZED: Cache array lookups in local variables
+                const particleSize = p.size[i];
+                const brightness = p.brightness[i];
+                const colorR = p.colorR[i];
+                const colorG = p.colorG[i];
+                const colorB = p.colorB[i];
+
+                // Store previous screen position
+                const prevX = p.prevScreenX[i];
+                const prevY = p.prevScreenY[i];
+                p.prevScreenX[i] = screenX;
+                p.prevScreenY[i] = screenY;
+
+                // ULTRA OPTIMIZED: Fast size calculation (avoid Math.pow and Math.sqrt)
+                const baseSize = 2.5 + particleSize;
+                const perspective = projected.perspective;
+                // Approximate p^1.5 without sqrt: use p * p * (0.5 + 0.5*p) for speed
+                const depthSizeScale = perspective * perspective * (0.5 + 0.5 * perspective);
+                const finalSize = baseSize * depthSizeScale * zoomTimesMultiplier;
+                const clampedSize = finalSize < minSizeDoubled ? minSizeDoubled : finalSize;
+
+                // ULTRA OPTIMIZED: Fast depth factor calculation
+                const depthFactor = projected.depthFactor || 1;
+                const depthAlpha = 0.4 + depthFactor * 0.6;
+                const brightnessAlpha = 0.6 + brightness * 0.4;
+                const foggedAlpha = brightnessAlpha * depthAlpha;
+
+                // ULTRA OPTIMIZED: Fast color depth calculations
+                const depthR = 0.8 + depthFactor * 0.2;
+                const depthG = 0.85 + depthFactor * 0.15;
+                const depthB = 0.95 + depthFactor * 0.05;
+
+                // OPTIMIZATION: Only add particles that are actually large enough to see
+                if (clampedSize < 0.5) continue; // Skip sub-pixel particles
+
+                // Push to array (object creation is unavoidable but optimized)
+                this.visibleParticles.push({
+                    index: i,
+                    screenX: screenX,
+                    screenY: screenY,
+                    z: projected.z,
+                    depth: projected.depth || 0,
+                    prevX: prevX,
+                    prevY: prevY,
+                    size: clampedSize,
+                    r: (colorR * depthR) | 0,  // Bitwise OR for fast floor
+                    g: (colorG * depthG) | 0,
+                    b: (colorB * depthB) | 0,
+                    alpha: foggedAlpha > 1 ? 1 : foggedAlpha,
+                    brightness: brightness,
+                    blur: p.blur[i] || 0,
+                    jitter: p.jitter[i] || 0,
+                    name: p.galaxyName[i] || '',
+                    depthFactor: depthFactor
+                });
             }
-
-            // Store previous screen position
-            const prevX = p.prevScreenX[i];
-            const prevY = p.prevScreenY[i];
-            p.prevScreenX[i] = projected.x;
-            p.prevScreenY[i] = projected.y;
-
-            this.visibleParticles.push({
-                index: i,
-                x: projected.x,
-                y: projected.y,
-                z: projected.z,
-                prevX: prevX,
-                prevY: prevY,
-                size: Math.max(VISUAL.particleMinSize,
-                    (1.5 + p.size[i] * 0.5) * projected.perspective * camera.zoom * this.particleSizeMultiplier),
-                r: p.colorR[i],
-                g: p.colorG[i],
-                b: p.colorB[i],
-                alpha: Math.min(1, 0.4 + p.brightness[i] * 0.6),
-                brightness: p.brightness[i]
-            });
         }
 
         this.visibleCount = this.visibleParticles.length;
     }
 
     /**
-     * Render all visible particles
+     * ULTRA FAST particle rendering - batched, minimal state changes
+     * Optimized for GPU acceleration
      */
     renderParticles(ctx, jitter) {
-        for (const particle of this.visibleParticles) {
-            // Apply jitter
-            const jx = particle.x + (Math.random() - 0.5) * jitter * 5;
-            const jy = particle.y + (Math.random() - 0.5) * jitter * 5;
+        const particles = this.visibleParticles;
+        const count = particles.length;
 
-            // Draw motion blur trail
-            if (this.effects.motionBlur && particle.prevX !== 0) {
-                this.drawMotionBlur(ctx, particle, jx, jy);
+        // FASTEST: Single-pass rendering with minimal state changes
+        const hasJitter = jitter > 0.01;
+        const TWO_PI = 6.283185307179586; // 2*PI hardcoded
+
+        // PERFORMANCE: Batch particles by size for fewer state changes
+        // Sort into size buckets: tiny (<1px), small (1-3px), medium (3-10px), large (>10px)
+        const tinyParticles = [];
+        const normalParticles = [];
+
+        for (let i = 0; i < count; i++) {
+            const p = particles[i];
+            if (p.size < 1) {
+                tinyParticles.push(p);
+            } else {
+                normalParticles.push(p);
             }
+        }
 
-            // Draw bloom/glow
-            if (this.effects.bloom && particle.size > 0.5) {
-                this.drawBloom(ctx, particle, jx, jy);
+        // PERFORMANCE: Render tiny particles as single pixels (ultra fast)
+        if (tinyParticles.length > 0) {
+            for (let i = 0; i < tinyParticles.length; i++) {
+                const p = tinyParticles[i];
+                ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+                ctx.fillRect(p.screenX | 0, p.screenY | 0, 1, 1);
             }
+        }
 
-            // Draw particle core
-            ctx.fillStyle = `rgba(${particle.r}, ${particle.g}, ${particle.b}, ${particle.alpha})`;
-            ctx.beginPath();
-            ctx.arc(jx, jy, particle.size, 0, Math.PI * 2);
-            ctx.fill();
+        // PERFORMANCE: Render normal particles with reduced state changes
+        if (normalParticles.length > 0) {
+            // Group by similar colors to reduce fillStyle changes
+            let lastColorKey = '';
+
+            for (let i = 0; i < normalParticles.length; i++) {
+                const p = normalParticles[i];
+
+                // PERFORMANCE: Apply jitter only if needed
+                const x = hasJitter ? p.screenX + (Math.random() - 0.5) * jitter * 5 : p.screenX;
+                const y = hasJitter ? p.screenY + (Math.random() - 0.5) * jitter * 5 : p.screenY;
+
+                // PERFORMANCE: Only change fillStyle if color changed
+                const colorKey = `${p.r},${p.g},${p.b},${p.alpha}`;
+                if (colorKey !== lastColorKey) {
+                    ctx.fillStyle = `rgba(${colorKey})`;
+                    lastColorKey = colorKey;
+                }
+
+                // PERFORMANCE: Use path batching for circles
+                ctx.beginPath();
+                ctx.arc(x, y, p.size, 0, TWO_PI);
+                ctx.fill();
+            }
         }
     }
 
